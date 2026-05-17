@@ -68,4 +68,29 @@ jobs:
             | tee /tmp/deploy.json
           jq -e '.status == 1' /tmp/deploy.json > /dev/null || (cat /tmp/deploy.json; exit 1)
 
+      - name: 3/3 — Diagnostic: confirm docroot and list its files
+        run: |
+          set -e
+          # Wait for the async deploy to actually finish
+          sleep 6
+          echo "::group::Subdomain vhost record"
+          curl -sS "https://${CPANEL_HOST_CLEAN}:2083/execute/DomainInfo/domains_data?return_https_redirect_status=0" \
+            -H "Authorization: cpanel ${CPANEL_USER}:${CPANEL_TOKEN}" \
+          | jq '.data | (.. | objects | select(.servername? == "lgtaskmanager.thelittlegraduates.in"))'
+          echo "::endgroup::"
+
+          echo "::group::Files actually in the deploy dir"
+          curl -sS "https://${CPANEL_HOST_CLEAN}:2083/execute/Fileman/list_files?dir=%2Fhome%2F${CPANEL_USER}%2Fthelittlegraduates.in%2Flgtaskmanager&include_hidden=1" \
+            -H "Authorization: cpanel ${CPANEL_USER}:${CPANEL_TOKEN}" \
+          | jq '(.data // {}) | (.files // .) | map({file, size, mtime})' 2>&1 | head -80
+          echo "::endgroup::"
+
+          echo "::group::Tail of last-lgtm-deploy.log on the server"
+          # The log lives at ~/last-lgtm-deploy.log which is OUTSIDE the docroot,
+          # so we can only read it via Fileman::get_file_content.
+          curl -sS "https://${CPANEL_HOST_CLEAN}:2083/execute/Fileman/get_file_content?dir=%2Fhome%2F${CPANEL_USER}&file=last-lgtm-deploy.log&from_charset=UTF-8&to_charset=UTF-8" \
+            -H "Authorization: cpanel ${CPANEL_USER}:${CPANEL_TOKEN}" \
+          | jq -r '.data.content // .errors // "(no content)"' | tail -30
+          echo "::endgroup::"
+
 
