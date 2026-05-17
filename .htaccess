@@ -9,8 +9,10 @@ DirectoryIndex index.php
 # Disable directory listings
 Options -Indexes
 
-# Force HTTPS
-RewriteCond %{HTTPS} off
+# Force HTTPS — use port + forwarded-proto so it works behind Hostgator's
+# load balancer where %{HTTPS} can read "on" even for plain HTTP clients.
+RewriteCond %{SERVER_PORT} !=443
+RewriteCond %{HTTP:X-Forwarded-Proto} !=https
 RewriteRule ^(.*)$ https://%{HTTP_HOST}/$1 [R=301,L]
 
 # Basic security headers
