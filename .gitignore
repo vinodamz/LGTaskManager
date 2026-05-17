@@ -29,6 +29,7 @@ Thumbs.db
 .env.local
 *.token
 .token
+includes/config.php
 
 # Logs
 *.log

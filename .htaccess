@@ -1,0 +1,21 @@
+# Protect includes directory from direct web access
+RewriteEngine On
+RewriteRule ^includes/.*$ - [F,L]
+RewriteRule ^sql/.*$ - [F,L]
+
+# Default to index.php
+DirectoryIndex index.php
+
+# Disable directory listings
+Options -Indexes
+
+# Force HTTPS (uncomment after SSL is active on the subdomain)
+# RewriteCond %{HTTPS} off
+# RewriteRule ^(.*)$ https://%{HTTP_HOST}/$1 [R=301,L]
+
+# Basic security headers
+<IfModule mod_headers.c>
+    Header set X-Content-Type-Options "nosniff"
+    Header set X-Frame-Options "SAMEORIGIN"
+    Header set Referrer-Policy "strict-origin-when-cross-origin"
+</IfModule>
