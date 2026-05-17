@@ -1,20 +1,12 @@
 ---
 # cPanel deployment recipe.
 # IMPORTANT: cPanel runs each task in its own subshell — env vars do NOT
-# persist between tasks. Inline everything in one task.
+# persist between tasks. Also: keep the rsync invocation on ONE PHYSICAL LINE
+# — YAML's folded scalar (>-) preserves newlines on more-indented continuation
+# lines, which silently corrupted earlier deploys (rsync saw `./` as its own
+# command and skipped the actual sync).
 deployment:
   tasks:
-    - >-
-      DEPLOYPATH=$HOME/thelittlegraduates.in/lgtaskmanager/;
-      /usr/bin/rsync -av --checksum --no-perms --no-times --omit-dir-times
-        --exclude='.git/' --exclude='.github/' --exclude='.gitignore'
-        --exclude='.cpanel.yml' --exclude='README.md' --exclude='DEPLOY.md'
-        --exclude='CICD.md' --exclude='includes/config.php'
-        ./ "$DEPLOYPATH" > $HOME/last-lgtm-deploy.log 2>&1;
-      /bin/rm -f
-        "$DEPLOYPATH/whoami.php" "$DEPLOYPATH/probe.txt"
-        "$DEPLOYPATH/probe-nested.txt" "$DEPLOYPATH/probe-bare.txt"
-        "$HOME/whoami.php" "$HOME/lgtaskmanager/whoami.php"
-        "$HOME/lgtaskmanager/probe.txt" "$HOME/lgtaskmanager/probe-bare.txt";
-      echo "deployed to $DEPLOYPATH at $(date)" >> $HOME/last-lgtm-deploy.log;
-      /bin/cp $HOME/last-lgtm-deploy.log "$DEPLOYPATH/last-deploy.log"
+    - /usr/bin/rsync -av --checksum --no-perms --no-times --omit-dir-times --exclude='.git/' --exclude='.github/' --exclude='.gitignore' --exclude='.cpanel.yml' --exclude='README.md' --exclude='DEPLOY.md' --exclude='CICD.md' --exclude='includes/config.php' ./ $HOME/thelittlegraduates.in/lgtaskmanager/ > $HOME/last-lgtm-deploy.log 2>&1
+    - /bin/cp $HOME/last-lgtm-deploy.log $HOME/thelittlegraduates.in/lgtaskmanager/last-deploy.log
+    - /bin/rm -f $HOME/thelittlegraduates.in/lgtaskmanager/whoami.php $HOME/thelittlegraduates.in/lgtaskmanager/probe.txt $HOME/thelittlegraduates.in/lgtaskmanager/probe-nested.txt $HOME/thelittlegraduates.in/lgtaskmanager/probe-bare.txt $HOME/whoami.php $HOME/lgtaskmanager/whoami.php $HOME/lgtaskmanager/probe.txt $HOME/lgtaskmanager/probe-bare.txt
