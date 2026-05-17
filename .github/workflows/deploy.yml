@@ -68,7 +68,20 @@ jobs:
             | tee /tmp/deploy.json
           jq -e '.status == 1' /tmp/deploy.json > /dev/null || (cat /tmp/deploy.json; exit 1)
 
-      - name: "3/3 — Diagnostic: confirm docroot and list its files"
+      - name: "3/4 — Force LiteSpeed vhost reload (re-set subdomain docroot)"
+        run: |
+          set -e
+          # Re-applying the same docroot value forces cPanel to rewrite the
+          # Apache/LiteSpeed vhost include, fixing the recurring stale-cache
+          # bug where files exist on disk but HTTP returns 404.
+          RESP=$(curl -sS "https://${CPANEL_HOST_CLEAN}:2083/execute/SubDomain/change_doc_root" \
+            -H "Authorization: cpanel ${CPANEL_USER}:${CPANEL_TOKEN}" \
+            --data-urlencode "domain=lgtaskmanager.thelittlegraduates.in" \
+            --data-urlencode "dir=/home/${CPANEL_USER}/thelittlegraduates.in/lgtaskmanager")
+          echo "$RESP" | jq '.'
+          # Don't fail the deploy if this fails — vhost may already be correct.
+
+      - name: "4/4 — Diagnostic: confirm docroot and list its files"
         run: |
           set -e
           # Wait for the async deploy to actually finish
