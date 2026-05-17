@@ -105,7 +105,7 @@ $cfg = app_config();
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <meta name="theme-color" content="#FFF8F0">
     <title>Sign in — <?= e($cfg['app']['name']) ?></title>
-    <link rel="stylesheet" href="assets/css/style.css">
+    <link rel="stylesheet" href="assets/css/style.css?v=<?= e(asset_version()) ?>">
 </head>
 <body class="landing">
 
@@ -173,6 +173,6 @@ $cfg = app_config();
 <script>
     window.LGTM_CSRF = <?= json_encode(csrf_token()) ?>;
 </script>
-<script src="assets/js/login.js"></script>
+<script src="assets/js/login.js?v=<?= e(asset_version()) ?>"></script>
 </body>
 </html>

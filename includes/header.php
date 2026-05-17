@@ -11,7 +11,7 @@ $user = current_user();
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <meta name="theme-color" content="#FFF8F0">
     <title><?= e($pageTitle ?? $cfg['app']['name']) ?></title>
-    <link rel="stylesheet" href="assets/css/style.css">
+    <link rel="stylesheet" href="assets/css/style.css?v=<?= e(asset_version()) ?>">
 </head>
 <body>
 <header class="topbar">

@@ -71,3 +71,18 @@ function first_name(string $name): string
     $parts = preg_split('/\s+/', trim($name));
     return $parts[0] ?? $name;
 }
+
+/**
+ * Cache-busting version string for assets. Uses the mtime of style.css —
+ * any deploy that updates it bumps the query string and forces browsers
+ * to fetch the new file.
+ */
+function asset_version(): string
+{
+    static $v = null;
+    if ($v === null) {
+        $css = __DIR__ . '/../assets/css/style.css';
+        $v = is_readable($css) ? (string) filemtime($css) : '1';
+    }
+    return $v;
+}
