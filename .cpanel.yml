@@ -6,7 +6,7 @@ deployment:
   tasks:
     - >-
       DEPLOYPATH=$HOME/thelittlegraduates.in/lgtaskmanager/;
-      /usr/bin/rsync -av --no-perms --no-times --omit-dir-times
+      /usr/bin/rsync -av --checksum --no-perms --no-times --omit-dir-times
         --exclude='.git/' --exclude='.github/' --exclude='.gitignore'
         --exclude='.cpanel.yml' --exclude='README.md' --exclude='DEPLOY.md'
         --exclude='CICD.md' --exclude='includes/config.php'
@@ -16,4 +16,5 @@ deployment:
         "$DEPLOYPATH/probe-nested.txt" "$DEPLOYPATH/probe-bare.txt"
         "$HOME/whoami.php" "$HOME/lgtaskmanager/whoami.php"
         "$HOME/lgtaskmanager/probe.txt" "$HOME/lgtaskmanager/probe-bare.txt";
-      echo "deployed to $DEPLOYPATH" >> $HOME/last-lgtm-deploy.log
+      echo "deployed to $DEPLOYPATH at $(date)" >> $HOME/last-lgtm-deploy.log;
+      /bin/cp $HOME/last-lgtm-deploy.log "$DEPLOYPATH/last-deploy.log"
