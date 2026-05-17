@@ -531,6 +531,85 @@ form.inline { display: inline; }
 .board-card-chosen { box-shadow: 0 0 0 3px color-mix(in srgb, var(--col) 30%, transparent); }
 .board-card-drag   { transform: rotate(1.5deg); }
 
+/* Date-bucket card styling */
+.board-card.date-today     { box-shadow: 0 0 0 2px color-mix(in srgb, var(--col) 50%, transparent), var(--shadow-card); }
+.board-card.date-overdue   { border-left-color: var(--magenta-deep); background: #FFF5F5; }
+.board-card.date-tomorrow  { /* default */ }
+.board-card.date-this-week { background: #FBFCF9; }
+.board-card.date-later     { opacity: .82; }
+.board-card.date-no-date   { /* default */ }
+
+.board-card-date {
+    font-size: 11px; font-weight: 700;
+    padding: 3px 8px; border-radius: 999px;
+    letter-spacing: .08em; text-transform: uppercase;
+    background: var(--cream-2); color: var(--ink-soft);
+}
+.board-card-date.date-today    { background: var(--sun); color: var(--ink); }
+.board-card-date.date-overdue  { background: #FFE0E0; color: var(--magenta-deep); }
+.board-card-date.date-tomorrow { background: var(--sky); color: #2D6BA0; }
+
+.recurring-pill {
+    font-size: 12px; font-weight: 700;
+    width: 22px; height: 22px; line-height: 18px;
+    text-align: center; border-radius: 999px;
+    background: var(--sage); color: var(--green-deep);
+    display: inline-block;
+}
+
+/* =========================================================
+   Repeat block on New-task form
+   ========================================================= */
+.repeat-block {
+    border: 1px dashed var(--line);
+    border-radius: var(--r-md);
+    padding: 12px 14px 14px;
+    margin-top: 6px;
+}
+.repeat-toggle { padding-bottom: 8px; }
+.dow-presets {
+    display: flex; gap: 6px; flex-wrap: wrap; margin: 4px 0 8px;
+}
+.dow-presets button {
+    background: var(--cream-2); border: 0;
+    padding: 6px 12px; border-radius: 999px;
+    font-size: 13px; font-weight: 600; color: var(--ink-soft);
+    cursor: pointer;
+}
+.dow-presets button:hover { background: var(--sun); color: var(--ink); }
+.dow-chips {
+    display: flex; gap: 6px; flex-wrap: wrap;
+}
+.dow-chip {
+    cursor: pointer;
+    border: 1px solid var(--line); border-radius: 999px;
+    padding: 6px 10px; font-weight: 600; font-size: 13px;
+    background: #fff; color: var(--ink-soft);
+    user-select: none;
+}
+.dow-chip input { display: none; }
+.dow-chip:has(input:checked) { background: var(--ink); color: #fff; border-color: var(--ink); }
+
+/* =========================================================
+   Recurrences manager (admin)
+   ========================================================= */
+.recur-list {
+    list-style: none; padding: 0; margin: 0;
+    display: flex; flex-direction: column; gap: 8px;
+}
+.recur-list li {
+    background: #fff; border: 1px solid var(--line);
+    border-radius: var(--r-md); padding: 12px 14px;
+    display: grid; gap: 6px;
+    grid-template-columns: 1fr auto;
+    align-items: center;
+}
+.recur-title { font-family: var(--display); font-weight: 600; font-size: 16px; }
+.recur-meta  { font-size: 13px; color: var(--ink-soft); }
+.recur-meta span + span::before { content: ' · '; }
+.recur-actions { display: flex; gap: 8px; }
+.recur-inactive { opacity: .5; }
+
 @media (max-width: 720px) {
     .board { grid-auto-columns: 88vw; }
 }

@@ -72,6 +72,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         redirect('admin.php');
     }
 
+    // -------- Recurring task management --------
+    if ($op === 'rec_toggle') {
+        $id = (int)($_POST['id'] ?? 0);
+        $stmt = db()->prepare("UPDATE task_recurrences SET is_active = 1 - is_active WHERE id = :id");
+        $stmt->execute([':id' => $id]);
+        flash_set('ok', 'Recurrence toggled.');
+        redirect('admin.php');
+    }
+    if ($op === 'rec_delete') {
+        $id = (int)($_POST['id'] ?? 0);
+        $stmt = db()->prepare("DELETE FROM task_recurrences WHERE id = :id");
+        $stmt->execute([':id' => $id]);
+        flash_set('ok', 'Recurrence deleted (existing task instances kept).');
+        redirect('admin.php');
+    }
+
     if ($op === 'create') {
         $name = trim($_POST['name'] ?? '');
         $pin  = preg_replace('/\D/', '', $_POST['pin'] ?? '');
@@ -273,6 +289,62 @@ $cols = task_columns();
 <?php endforeach; ?>
 
 <h2 class="section-h-spaced">Team</h2>
+<?php endif; ?>
+
+<?php if (recurrence_available()): ?>
+<?php
+$recurrences = db()->query("
+    SELECT r.*, c.name AS column_name, u.name AS assignee_name
+    FROM task_recurrences r
+    LEFT JOIN task_columns c ON c.id = r.column_id
+    LEFT JOIN users u        ON u.id = r.assigned_to_user_id
+    ORDER BY r.is_active DESC, r.title ASC
+")->fetchAll();
+?>
+<h2 class="section-h-spaced">Recurring tasks</h2>
+<p class="muted">Create recurring task templates from the <a href="tasks.php">Tasks page</a> — tick "Repeat this task" when filling in the new-task form.</p>
+
+<?php if ($recurrences): ?>
+<ul class="recur-list">
+    <?php foreach ($recurrences as $r):
+        $when = match ($r['frequency']) {
+            'daily'   => 'Every day',
+            'weekly'  => 'Weekly · ' . days_mask_label((int)$r['days_mask']),
+            'monthly' => 'Monthly · day ' . (int)$r['day_of_month'],
+            default   => $r['frequency'],
+        };
+    ?>
+        <li class="<?= $r['is_active'] ? '' : 'recur-inactive' ?>">
+            <div>
+                <div class="recur-title"><?= e($r['title']) ?></div>
+                <div class="recur-meta">
+                    <span><?= e($when) ?></span>
+                    <?php if (!empty($r['column_name'])): ?><span>→ <?= e($r['column_name']) ?></span><?php endif; ?>
+                    <?php if (!empty($r['assignee_name'])): ?><span>👤 <?= e($r['assignee_name']) ?></span><?php endif; ?>
+                    <?php if (!empty($r['end_date'])): ?><span>ends <?= e($r['end_date']) ?></span><?php endif; ?>
+                    <span><?= $r['is_active'] ? 'active' : 'paused' ?></span>
+                </div>
+            </div>
+            <div class="recur-actions">
+                <form method="post" class="inline">
+                    <input type="hidden" name="_csrf" value="<?= e(csrf_token()) ?>">
+                    <input type="hidden" name="op" value="rec_toggle">
+                    <input type="hidden" name="id" value="<?= (int)$r['id'] ?>">
+                    <button class="btn"><?= $r['is_active'] ? 'Pause' : 'Resume' ?></button>
+                </form>
+                <form method="post" class="inline" onsubmit="return confirm('Delete this recurring task? Existing instances remain on the board.')">
+                    <input type="hidden" name="_csrf" value="<?= e(csrf_token()) ?>">
+                    <input type="hidden" name="op" value="rec_delete">
+                    <input type="hidden" name="id" value="<?= (int)$r['id'] ?>">
+                    <button class="link-btn">Delete</button>
+                </form>
+            </div>
+        </li>
+    <?php endforeach; ?>
+</ul>
+<?php else: ?>
+    <div class="empty">No recurring tasks yet. Open the <a href="tasks.php">Tasks page</a> → New task → tick "Repeat this task".</div>
+<?php endif; ?>
 <?php endif; ?>
 
 <ul class="team-list">

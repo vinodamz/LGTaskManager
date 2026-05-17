@@ -28,6 +28,28 @@ INSERT IGNORE INTO task_columns (name, position, color, is_done) VALUES
     ('In progress', 2, '#F5B342', 0),
     ('Done',        3, '#5BA547', 1);
 
+CREATE TABLE IF NOT EXISTS task_recurrences (
+    id                   INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    title                VARCHAR(200)   NOT NULL,
+    description          TEXT           NULL,
+    priority             ENUM('low','normal','high') NOT NULL DEFAULT 'normal',
+    column_id            INT UNSIGNED   NULL,
+    assigned_to_user_id  INT UNSIGNED   NULL,
+    frequency            ENUM('daily','weekly','monthly') NOT NULL DEFAULT 'daily',
+    days_mask            TINYINT UNSIGNED NOT NULL DEFAULT 127,
+    day_of_month         TINYINT UNSIGNED NULL,
+    start_date           DATE           NOT NULL,
+    end_date             DATE           NULL,
+    is_active            TINYINT(1)     NOT NULL DEFAULT 1,
+    created_by_user_id   INT UNSIGNED   NOT NULL,
+    created_at           TIMESTAMP      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at           TIMESTAMP      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_active (is_active, start_date),
+    CONSTRAINT fk_rec_column   FOREIGN KEY (column_id)           REFERENCES task_columns(id) ON DELETE SET NULL,
+    CONSTRAINT fk_rec_assignee FOREIGN KEY (assigned_to_user_id) REFERENCES users(id)        ON DELETE SET NULL,
+    CONSTRAINT fk_rec_creator  FOREIGN KEY (created_by_user_id)  REFERENCES users(id)        ON DELETE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 CREATE TABLE IF NOT EXISTS tasks (
     id                  INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     title               VARCHAR(200) NOT NULL,
@@ -39,15 +61,20 @@ CREATE TABLE IF NOT EXISTS tasks (
     due_date            DATE         NULL,
     assigned_to_user_id INT UNSIGNED NULL,
     created_by_user_id  INT UNSIGNED NOT NULL,
+    recurrence_id       INT UNSIGNED NULL,
+    instance_date       DATE         NULL,
     created_at          TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at          TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX idx_status (status),
     INDEX idx_col_pos (column_id, board_position),
     INDEX idx_assigned (assigned_to_user_id),
     INDEX idx_due (due_date),
-    CONSTRAINT fk_tasks_column   FOREIGN KEY (column_id)           REFERENCES task_columns(id) ON DELETE RESTRICT,
-    CONSTRAINT fk_tasks_assigned FOREIGN KEY (assigned_to_user_id) REFERENCES users(id) ON DELETE SET NULL,
-    CONSTRAINT fk_tasks_creator  FOREIGN KEY (created_by_user_id)  REFERENCES users(id) ON DELETE RESTRICT
+    INDEX idx_instance_date (instance_date),
+    UNIQUE KEY uq_recurrence_date (recurrence_id, instance_date),
+    CONSTRAINT fk_tasks_column     FOREIGN KEY (column_id)           REFERENCES task_columns(id)      ON DELETE RESTRICT,
+    CONSTRAINT fk_tasks_assigned   FOREIGN KEY (assigned_to_user_id) REFERENCES users(id)             ON DELETE SET NULL,
+    CONSTRAINT fk_tasks_creator    FOREIGN KEY (created_by_user_id)  REFERENCES users(id)             ON DELETE RESTRICT,
+    CONSTRAINT fk_tasks_recurrence FOREIGN KEY (recurrence_id)       REFERENCES task_recurrences(id)  ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- After running this schema, open /install.php in your browser

@@ -4,6 +4,9 @@ require_once __DIR__ . '/includes/functions.php';
 
 $user = require_login();
 
+// Materialise today's recurring instances on every visit.
+materialize_recurrences();
+
 // =========================================================================
 // AJAX endpoints — POSTs that return JSON. Browser navigates use HTML below.
 // =========================================================================
@@ -85,7 +88,47 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         if ($op === 'create') {
-            // place at end of selected column
+            // ----- Recurring? Then we insert a recurrence template instead. -----
+            $repeat = !empty($_POST['repeat']);
+            if ($repeat && recurrence_available()) {
+                $freq = $_POST['rec_frequency'] ?? 'daily';
+                if (!in_array($freq, ['daily', 'weekly', 'monthly'], true)) $freq = 'daily';
+
+                $startIso = $_POST['rec_start']   ?: date('Y-m-d');
+                $endIso   = $_POST['rec_end']     ?: null;
+                $dom      = $freq === 'monthly' ? max(1, min(28, (int)($_POST['rec_dom'] ?? (int)date('j')))) : null;
+
+                // build mask from checkboxes; fall back to preset
+                $mask = 0;
+                if ($freq === 'weekly') {
+                    foreach (($_POST['rec_days'] ?? []) as $d) {
+                        $d = (int)$d;
+                        if ($d >= 0 && $d <= 6) $mask |= (1 << $d);
+                    }
+                    if ($mask === 0) $mask = DAYS_WEEKDAYS;
+                } else {
+                    $mask = DAYS_ALL;
+                }
+
+                $stmt = db()->prepare("
+                    INSERT INTO task_recurrences
+                        (title, description, priority, column_id, assigned_to_user_id,
+                         frequency, days_mask, day_of_month, start_date, end_date,
+                         created_by_user_id)
+                    VALUES (:t, :d, :p, :col, :a, :f, :m, :dom, :s, :e, :c)
+                ");
+                $stmt->execute([
+                    ':t' => $title, ':d' => $description, ':p' => $priority,
+                    ':col' => $colId ?: null, ':a' => $assignee,
+                    ':f' => $freq, ':m' => $mask, ':dom' => $dom,
+                    ':s' => $startIso, ':e' => $endIso, ':c' => $user['id'],
+                ]);
+                materialize_recurrences();  // create today's instance if it qualifies
+                flash_set('ok', 'Recurring task created. Today\'s instance will show on the board if it matches.');
+                redirect('tasks.php?' . http_build_query(array_diff_key($_GET, ['edit' => 1])));
+            }
+
+            // ----- Plain one-off task -----
             $maxPos = 0;
             if ($colId > 0) {
                 $q = db()->prepare("SELECT COALESCE(MAX(board_position), -1) + 1 FROM tasks WHERE column_id = :c");
@@ -176,13 +219,24 @@ $whereSql = $where ? 'WHERE ' . implode(' AND ', $where) : '';
 
 $sql = "
     SELECT t.*, u.name AS assignee_name, c.name AS creator_name,
-           col.name AS column_name, col.color AS column_color, col.is_done AS column_done
+           col.name AS column_name, col.color AS column_color, col.is_done AS column_done,
+           COALESCE(t.instance_date, t.due_date) AS card_date
     FROM tasks t
-    LEFT JOIN users u        ON u.id   = t.assigned_to_user_id
-    LEFT JOIN users c        ON c.id   = t.created_by_user_id
+    LEFT JOIN users u          ON u.id   = t.assigned_to_user_id
+    LEFT JOIN users c          ON c.id   = t.created_by_user_id
     LEFT JOIN task_columns col ON col.id = t.column_id
     $whereSql
-    ORDER BY col.position ASC, t.board_position ASC, t.id DESC
+    ORDER BY col.position ASC,
+             -- overdue first, then today, then chronological, then no-date last
+             CASE
+                WHEN COALESCE(t.instance_date, t.due_date) IS NULL THEN 3
+                WHEN COALESCE(t.instance_date, t.due_date) <  CURDATE() THEN 0
+                WHEN COALESCE(t.instance_date, t.due_date) =  CURDATE() THEN 1
+                ELSE 2
+             END,
+             COALESCE(t.instance_date, t.due_date) ASC,
+             t.board_position ASC,
+             t.id DESC
 ";
 $stmt = db()->prepare($sql);
 $stmt->execute($params);
@@ -287,12 +341,94 @@ include __DIR__ . '/includes/header.php';
                 </select>
             </div>
         </div>
+        <?php if (!$editing && recurrence_available()): ?>
+            <fieldset class="repeat-block">
+                <label class="checkbox repeat-toggle">
+                    <input type="checkbox" name="repeat" value="1" id="rep-toggle">
+                    <span>Repeat this task</span>
+                </label>
+
+                <div class="repeat-fields" id="rep-fields" hidden>
+                    <div class="row">
+                        <div class="field">
+                            <label>Frequency</label>
+                            <select name="rec_frequency" id="rep-freq">
+                                <option value="daily">Daily</option>
+                                <option value="weekly" selected>Weekly</option>
+                                <option value="monthly">Monthly</option>
+                            </select>
+                        </div>
+                        <div class="field" id="rep-weekly">
+                            <label>Days of the week</label>
+                            <div class="dow-presets">
+                                <button type="button" data-preset="62">Mon–Fri</button>
+                                <button type="button" data-preset="65">Weekends</button>
+                                <button type="button" data-preset="127">Every day</button>
+                            </div>
+                            <div class="dow-chips">
+                                <?php $names = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+                                      $default = DAYS_WEEKDAYS;
+                                      foreach ($names as $i => $n): ?>
+                                    <label class="dow-chip">
+                                        <input type="checkbox" name="rec_days[]" value="<?= $i ?>"
+                                               <?= ($default & (1 << $i)) ? 'checked' : '' ?>>
+                                        <span><?= $n ?></span>
+                                    </label>
+                                <?php endforeach; ?>
+                            </div>
+                        </div>
+                        <div class="field" id="rep-monthly" hidden>
+                            <label>Day of the month</label>
+                            <input type="number" name="rec_dom" min="1" max="28" value="<?= e((string)(int)date('j')) ?>">
+                        </div>
+                        <div class="field">
+                            <label>Start</label>
+                            <input type="date" name="rec_start" value="<?= e(date('Y-m-d')) ?>">
+                        </div>
+                        <div class="field">
+                            <label>End <em>(optional)</em></label>
+                            <input type="date" name="rec_end" value="">
+                        </div>
+                    </div>
+                </div>
+            </fieldset>
+        <?php endif; ?>
+
         <div class="actions">
             <button class="btn btn-primary"><?= $editing ? 'Save' : 'Create task' ?></button>
             <?php if ($editing): ?><a class="btn btn-ghost" href="tasks.php?view=<?= e($view) ?>">Cancel</a><?php endif; ?>
         </div>
     </form>
 </details>
+<?php if (!$editing && recurrence_available()): ?>
+<script>
+(function(){
+  const t = document.getElementById('rep-toggle');
+  const f = document.getElementById('rep-fields');
+  const freq = document.getElementById('rep-freq');
+  const weekly = document.getElementById('rep-weekly');
+  const monthly = document.getElementById('rep-monthly');
+  function refreshFreq(){
+    const v = freq.value;
+    weekly.hidden  = v !== 'weekly';
+    monthly.hidden = v !== 'monthly';
+  }
+  if (t && f) {
+    t.addEventListener('change', () => { f.hidden = !t.checked; });
+    f.hidden = !t.checked;
+  }
+  if (freq) { freq.addEventListener('change', refreshFreq); refreshFreq(); }
+  document.querySelectorAll('.dow-presets button').forEach(b => {
+    b.addEventListener('click', () => {
+      const mask = parseInt(b.dataset.preset, 10) || 0;
+      document.querySelectorAll('input[name="rec_days[]"]').forEach(cb => {
+        cb.checked = (mask & (1 << parseInt(cb.value, 10))) > 0;
+      });
+    });
+  });
+})();
+</script>
+<?php endif; ?>
 
 <?php if ($view === 'board' && $hasKanban): ?>
     <!-- ============================ BOARD VIEW ============================ -->
@@ -307,12 +443,19 @@ include __DIR__ . '/includes/header.php';
                     <span class="board-col-count"><?= count($list) ?></span>
                 </header>
                 <ul class="board-col-list" data-col-id="<?= (int)$col['id'] ?>">
-                    <?php foreach ($list as $t): ?>
-                        <li class="board-card" data-task-id="<?= (int)$t['id'] ?>">
+                    <?php foreach ($list as $t):
+                        $cardDate = $t['card_date'] ?? null;
+                        $bucket   = date_bucket($cardDate);
+                        $label    = date_label($cardDate);
+                    ?>
+                        <li class="board-card date-<?= e($bucket) ?>" data-task-id="<?= (int)$t['id'] ?>">
                             <div class="board-card-pills">
+                                <?php if ($label !== ''): ?>
+                                    <span class="board-card-date date-<?= e($bucket) ?>"><?= e($label) ?></span>
+                                <?php endif; ?>
                                 <span class="task-priority <?= e(priority_class($t['priority'])) ?>"><?= e($t['priority']) ?></span>
-                                <?php if (!empty($t['due_date'])): ?>
-                                    <span class="task-due">Due <?= e($t['due_date']) ?></span>
+                                <?php if (!empty($t['recurrence_id'])): ?>
+                                    <span class="recurring-pill" title="Recurring task">↻</span>
                                 <?php endif; ?>
                             </div>
                             <h3 class="board-card-title">

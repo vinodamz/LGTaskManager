@@ -7,6 +7,9 @@ if (!$user) {
     redirect('login.php');
 }
 
+// Materialise today's recurring instances on every dashboard load.
+materialize_recurrences();
+
 $pageTitle = 'Dashboard — LG Task Manager';
 
 $cols = task_columns();
