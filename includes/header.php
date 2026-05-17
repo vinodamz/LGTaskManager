@@ -23,6 +23,7 @@ $user = current_user();
         <nav>
             <a href="index.php">Dashboard</a>
             <a href="tasks.php">Tasks</a>
+            <a href="calendar.php">Calendar</a>
             <?php if ($user['role'] === 'admin'): ?>
                 <a href="admin.php">Team</a>
             <?php endif; ?>
