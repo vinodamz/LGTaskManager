@@ -1,12 +1,12 @@
-name: Deploy to Hostgator
+name: Deploy to Hostgator (cPanel pull)
 
 on:
   push:
     branches: [main]
-  workflow_dispatch:        # lets you trigger a deploy manually from the Actions tab
+  workflow_dispatch:
 
 concurrency:
-  group: deploy-hostgator   # don't run two deploys at once
+  group: deploy-hostgator
   cancel-in-progress: false
 
 jobs:
@@ -30,36 +30,33 @@ jobs:
           done
 
   deploy:
-    name: FTP deploy
+    name: Trigger cPanel git-pull and deploy
     needs: lint
     runs-on: ubuntu-latest
+    env:
+      CPANEL_HOST: ${{ secrets.CPANEL_HOST }}    # e.g. s3744.bom1.stableserver.net
+      CPANEL_USER: ${{ secrets.CPANEL_USER }}    # e.g. ideyyfbn
+      CPANEL_TOKEN: ${{ secrets.CPANEL_TOKEN }}
+      REPO_ROOT: /home/${{ secrets.CPANEL_USER }}/repos/LGTaskManager
     steps:
-      - uses: actions/checkout@v4
+      - name: 1/2 — Pull latest from origin (git fetch + reset to remote)
+        run: |
+          set -e
+          curl -sS --fail-with-body -X POST \
+            "https://${CPANEL_HOST}:2083/execute/VersionControl/update" \
+            -H "Authorization: cpanel ${CPANEL_USER}:${CPANEL_TOKEN}" \
+            --data-urlencode "repository_root=${REPO_ROOT}" \
+            --data-urlencode "branch=main" \
+            | tee /tmp/pull.json
+          # cPanel returns 200 even on logical errors; surface them.
+          jq -e '.status == 1' /tmp/pull.json > /dev/null || (cat /tmp/pull.json; exit 1)
 
-      - name: Upload changed files via FTP
-        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
-        with:
-          server:     ${{ secrets.FTP_SERVER }}
-          username:   ${{ secrets.FTP_USERNAME }}
-          password:   ${{ secrets.FTP_PASSWORD }}
-          server-dir: ${{ secrets.FTP_SERVER_DIR }}
-          # Plain FTP. Switching to FTPS triggers Hostgator's TLS cert hostname mismatch
-          # (the cert is for the server hostname, not the domain). Re-enable once we have
-          # either the matching FTP hostname or relax the check via a self-hosted runner.
-          protocol:   ftp
-          port:       21
-          timeout:    60000
-          # Only upload what's changed. State is tracked in .ftp-deploy-sync-state.json on the server.
-          log-level:  standard
-          # Don't touch these on the server:
-          exclude: |
-            **/.git*
-            **/.git*/**
-            **/.github/**
-            **/.DS_Store
-            **/node_modules/**
-            README.md
-            DEPLOY.md
-            CICD.md
-            .gitignore
-            includes/config.php
+      - name: 2/2 — Run .cpanel.yml deployment task (rsync to docroot)
+        run: |
+          set -e
+          curl -sS --fail-with-body -X POST \
+            "https://${CPANEL_HOST}:2083/execute/VersionControlDeployment/create" \
+            -H "Authorization: cpanel ${CPANEL_USER}:${CPANEL_TOKEN}" \
+            --data-urlencode "repository_root=${REPO_ROOT}" \
+            | tee /tmp/deploy.json
+          jq -e '.status == 1' /tmp/deploy.json > /dev/null || (cat /tmp/deploy.json; exit 1)

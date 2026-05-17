@@ -1,96 +1,115 @@
-# CI/CD — auto-deploy to Hostgator
+# CI/CD — auto-deploy to Hostgator (cPanel pull model)
 
-Every push to `main` runs `.github/workflows/deploy.yml`, which:
+## How it works
 
-1. Lints every `.php` file with `php -l` (fast — fails the build on a syntax error).
-2. Uploads changed files via FTPS to your Hostgator subdomain.
+```
+   git push                                       cPanel git pull
+GitHub  ──────► GitHub Actions  ──── HTTPS:2083 ───────────────► GitHub
+                      │                       │
+                      │ POST UAPI              ▼
+                      ▼                  cPanel clones / updates
+              cPanel UAPI calls           /home/<user>/repos/LGTaskManager
+                  • update                       │
+                  • deployment/create            ▼
+                                       runs .cpanel.yml
+                                                │
+                                                ▼
+                                       rsync into docroot
+                                  /home/<user>/thelittlegraduates.in/lgtaskmanager
+```
 
-State is tracked in `.ftp-deploy-sync-state.json` on the server, so only changed files transfer.
+No FTP. No credentials traverse the public internet *except* the cPanel API token (sent
+over HTTPS in an `Authorization` header). cPanel itself fetches from GitHub.
 
-## One-time setup
+## One-time setup (in cPanel)
 
-### 1. Create a dedicated FTP account in cPanel
+### 1. Enable Git Version Control and clone the repo
 
-You _can_ use your main cPanel FTP credentials, but a scoped account is cleaner.
+1. cPanel → **Git Version Control** → **Create**.
+2. **Clone a Repository** ON.
+3. Clone URL: `https://github.com/vinodamz/LGTaskManager.git`
+4. Repository path: `/home/ideyyfbn/repos/LGTaskManager`
+   (use a path OUTSIDE the docroot, so `.git/` never gets web-served)
+5. Repository Name: `LGTaskManager`. **Create**.
 
-1. cPanel → **FTP Accounts** → **Add FTP Account**.
-2. Login: `lgtm_deploy` (becomes `lgtm_deploy@yourdomain.com`).
-3. Password: generate a strong one. Copy it.
-4. Directory: `public_html/tasks` (or wherever your subdomain docroot is).
-5. Quota: Unlimited. Click **Create FTP Account**.
+cPanel will git-clone for you. The first checkout takes a few seconds.
 
-### 2. Find your FTP server hostname
+### 2. Create a cPanel API token
 
-cPanel → **FTP Accounts** → next to your new account, click **Configure FTP Client**.
-You'll see something like:
+1. cPanel → top-right user menu → **Manage API Tokens** (sometimes shown as just **API Tokens**).
+2. **Create**. Name: `gha-deploy`.
+3. (Optional, if your cPanel supports scopes) Restrict to `VersionControl` and `VersionControlDeployment`.
+4. **Create** → copy the token *immediately* (you cannot view it again).
 
-| | |
+### 3. Find the exact cPanel hostname
+
+cPanel → top-right user menu → look for "Server Name" or check the URL you log in with.
+It looks like `s3744.bom1.stableserver.net`. That's `CPANEL_HOST` below.
+
+> **Why the server hostname, not your domain?** The SSL cert on the cPanel control panel
+> (port 2083) is issued for the server hostname. Using your domain would fail TLS
+> verification.
+
+### 4. Add four secrets to the GitHub repo
+
+GitHub → repo **Settings → Secrets and variables → Actions → New repository secret**.
+
+| Name           | Value                                              |
+|----------------|----------------------------------------------------|
+| `CPANEL_HOST`  | `s3744.bom1.stableserver.net` (your actual server) |
+| `CPANEL_USER`  | `ideyyfbn`                                         |
+| `CPANEL_TOKEN` | the token from step 2                              |
+
+The old `FTP_*` secrets can be deleted.
+
+### 5. (Optional) Test the deploy manually
+
+Before pushing code, click cPanel → **Git Version Control → Manage → Pull or Deploy** for
+the repo. This runs `.cpanel.yml`. The first run populates the docroot with the latest files.
+
+After that, every `git push` to `main` re-runs the same flow automatically.
+
+## App bootstrap (still manual, one time)
+
+The Action ships **code**, not databases. Once the first deploy lands files in the docroot:
+
+1. cPanel → **MySQL Databases** → create DB + user + grant ALL.
+2. cPanel → **phpMyAdmin** → pick the DB → **Import** → upload `sql/schema.sql`.
+3. cPanel → **File Manager** → `/home/ideyyfbn/thelittlegraduates.in/lgtaskmanager/includes/`
+   → create `config.php` from `config.example.php` with real DB credentials.
+   This file is **excluded from rsync** in `.cpanel.yml`, so future deploys won't touch it.
+4. Confirm subdomain `lgtaskmanager.thelittlegraduates.in` docroots to
+   `/home/ideyyfbn/thelittlegraduates.in/lgtaskmanager`.
+5. Visit `https://lgtaskmanager.thelittlegraduates.in/install.php` → create the first admin
+   → **delete** `install.php` via File Manager.
+
+## How to inspect a deploy
+
+| Where | What you see |
 |---|---|
-| FTP Username  | `lgtm_deploy@yourdomain.com` |
-| FTP server    | `ftp.yourdomain.com` (or `s3744.bom1.stableserver.net`) |
-| FTP port      | `21` |
+| GitHub → **Actions** tab | Lint logs, UAPI HTTP responses (cPanel returns JSON with `status`, `messages`, `errors`) |
+| cPanel → **Git Version Control → Manage → Pull or Deploy** | Most recent pull/deploy timestamps + log |
+| cPanel → **Errors** | PHP runtime errors after deploy |
 
-Hostgator supports **explicit FTPS** (port 21 with TLS). The workflow uses that.
+## Manual trigger
 
-### 3. Add four secrets to the GitHub repo
+GitHub → **Actions** → **Deploy to Hostgator (cPanel pull)** → **Run workflow** → main → **Run workflow**.
 
-GitHub → your repo → **Settings → Secrets and variables → Actions → New repository secret**.
+## Forcing a clean slate
 
-| Name              | Value                                        |
-|-------------------|----------------------------------------------|
-| `FTP_SERVER`      | `ftp.yourdomain.com` (hostname only, no `ftp://`) |
-| `FTP_USERNAME`    | `lgtm_deploy@yourdomain.com`                 |
-| `FTP_PASSWORD`    | the password you set in step 1               |
-| `FTP_SERVER_DIR`  | `/public_html/tasks/` (note leading & trailing slashes) — or just `/` if the FTP account is already scoped to that folder |
+If the rsync gets confused:
 
-> **Note:** If you scoped the FTP account directory to `public_html/tasks` in step 1, the
-> account's "root" already IS that folder. In that case set `FTP_SERVER_DIR=/`.
-> If you used a generic FTP account that lands in `public_html/`, use `/public_html/tasks/`.
+1. cPanel → **File Manager** → delete everything under the docroot *except* `includes/config.php`.
+2. cPanel → **Git Version Control → Manage → Pull or Deploy** → click **Deploy HEAD**.
+   Re-runs `.cpanel.yml`, repopulates the docroot.
 
-### 4. First-run setup on the server
+## Security notes
 
-The Action only uploads files — it doesn't create databases or run SQL. Before the first deploy
-finishes successfully you still need to (one time, manually):
-
-1. Create the MySQL DB + user (cPanel → MySQL Databases) — see [DEPLOY.md](DEPLOY.md).
-2. Import `sql/schema.sql` via phpMyAdmin.
-3. Create `includes/config.php` on the server with your DB credentials.
-   (The Action will never overwrite this file — it's in the `exclude` list.)
-4. Visit `https://tasks.yourdomain.com/install.php`, create the first admin, then delete `install.php`.
-
-After that, every `git push` deploys automatically.
-
-## Triggering a deploy manually
-
-GitHub → **Actions** tab → **Deploy to Hostgator** → **Run workflow** → pick branch `main` → **Run workflow**.
-
-Useful for forcing a re-upload after fixing something directly on the server.
-
-## What does NOT get uploaded
-
-Listed in the `exclude:` block of `deploy.yml`:
-
-- `.git/`, `.github/` — repo metadata
-- `README.md`, `DEPLOY.md`, `CICD.md` — docs (avoid info disclosure)
-- `.gitignore`
-- `includes/config.php` — **production DB credentials are preserved**
-
-Everything else (`.htaccess`, `*.php`, `assets/`, `sql/`, `includes/config.example.php`) IS uploaded.
-
-`sql/` is kept so you can run new migrations via phpMyAdmin if the schema changes. `.htaccess`
-already denies web access to `sql/` and `includes/`.
-
-## Forcing a full re-sync
-
-If the server state ever drifts, delete `.ftp-deploy-sync-state.json` from the server via
-File Manager, then trigger a manual deploy. The Action will re-upload everything.
-
-## Troubleshooting
-
-| Symptom | Fix |
-|---|---|
-| Action fails at `php -l` | A syntax error landed in `main`. The job log shows the file + line. Push a fix. |
-| `ECONNREFUSED` / `ETIMEDOUT` | Wrong `FTP_SERVER` (try the cPanel server hostname instead of `ftp.yourdomain.com`), or Hostgator's firewall is blocking GitHub's runners. Try `port: 990` and `protocol: ftps-legacy` in `deploy.yml`. |
-| `530 Login authentication failed` | Wrong username or password. Double-check the full `user@domain` format. |
-| Files upload but site shows 500 | `includes/config.php` doesn't exist on the server, or has wrong DB creds. Check cPanel → **Errors**. |
-| Deploy says "0 files transferred" | Working as designed — nothing changed since the last sync. |
+- The cPanel API token has the scopes you grant it. If your cPanel version doesn't support
+  scopes, the token has **full account access** — treat it like a root password.
+- Rotate the token at least every 90 days. cPanel → API Tokens → revoke + create new →
+  update `CPANEL_TOKEN` in GitHub secrets.
+- `.cpanel.yml` excludes `includes/config.php` from rsync. **Never** commit DB credentials.
+- The repo clone at `/home/ideyyfbn/repos/LGTaskManager` is outside the docroot — `.git/`
+  is never web-served. Verify by visiting `https://lgtaskmanager.thelittlegraduates.in/.git/`
+  and confirming you get a 404.

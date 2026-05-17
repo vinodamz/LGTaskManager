@@ -1,0 +1,18 @@
+---
+# cPanel deployment recipe.
+# Runs when cPanel's Git Version Control receives a "deploy" trigger.
+# Working dir = the repo clone path (e.g. /home/<user>/repos/LGTaskManager).
+# Tasks run as the cPanel user; $HOME = /home/<user>.
+deployment:
+  tasks:
+    - export DEPLOYPATH=$HOME/thelittlegraduates.in/lgtaskmanager/
+    - /usr/bin/rsync -av
+        --exclude='.git/'
+        --exclude='.github/'
+        --exclude='.gitignore'
+        --exclude='.cpanel.yml'
+        --exclude='README.md'
+        --exclude='DEPLOY.md'
+        --exclude='CICD.md'
+        --exclude='includes/config.php'
+        ./ $DEPLOYPATH
