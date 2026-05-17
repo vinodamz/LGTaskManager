@@ -9,20 +9,46 @@ if (!$user) {
 
 $pageTitle = 'Dashboard — LG Task Manager';
 
-// Stats
-$counts = db()->query("SELECT status, COUNT(*) AS n FROM tasks GROUP BY status")->fetchAll();
-$byStatus = ['todo' => 0, 'in_progress' => 0, 'done' => 0];
-foreach ($counts as $r) $byStatus[$r['status']] = (int)$r['n'];
+$cols = task_columns();
+$hasKanban = $cols !== [];
 
-// My open tasks
-$mineStmt = db()->prepare("
-    SELECT t.*, u.name AS assignee_name
-    FROM tasks t
-    LEFT JOIN users u ON u.id = t.assigned_to_user_id
-    WHERE t.assigned_to_user_id = :uid AND t.status <> 'done'
-    ORDER BY (t.due_date IS NULL), t.due_date ASC, FIELD(t.priority,'high','normal','low')
-    LIMIT 10
-");
+// Stats per column (when kanban is set up), otherwise per status (legacy).
+$colStats = [];   // [['name' => 'To do', 'color' => '#...', 'is_done' => 0, 'n' => 3], ...]
+if ($hasKanban) {
+    $counts = db()->query("SELECT column_id, COUNT(*) AS n FROM tasks WHERE column_id IS NOT NULL GROUP BY column_id")->fetchAll();
+    $byCol = [];
+    foreach ($counts as $r) $byCol[(int)$r['column_id']] = (int)$r['n'];
+    foreach ($cols as $col) {
+        $colStats[] = [
+            'name'    => $col['name'],
+            'color'   => $col['color'],
+            'is_done' => (int)$col['is_done'],
+            'n'       => $byCol[(int)$col['id']] ?? 0,
+        ];
+    }
+}
+
+// My open tasks (anything not in a "done" column, or not 'done' if no kanban).
+if ($hasKanban) {
+    $mineStmt = db()->prepare("
+        SELECT t.*, u.name AS assignee_name, col.name AS column_name, col.color AS column_color
+        FROM tasks t
+        LEFT JOIN users u          ON u.id   = t.assigned_to_user_id
+        LEFT JOIN task_columns col ON col.id = t.column_id
+        WHERE t.assigned_to_user_id = :uid AND (col.is_done IS NULL OR col.is_done = 0)
+        ORDER BY (t.due_date IS NULL), t.due_date ASC, FIELD(t.priority,'high','normal','low')
+        LIMIT 10
+    ");
+} else {
+    $mineStmt = db()->prepare("
+        SELECT t.*, u.name AS assignee_name, NULL AS column_name, NULL AS column_color
+        FROM tasks t
+        LEFT JOIN users u ON u.id = t.assigned_to_user_id
+        WHERE t.assigned_to_user_id = :uid AND t.status <> 'done'
+        ORDER BY (t.due_date IS NULL), t.due_date ASC, FIELD(t.priority,'high','normal','low')
+        LIMIT 10
+    ");
+}
 $mineStmt->execute([':uid' => $user['id']]);
 $mine = $mineStmt->fetchAll();
 
@@ -36,18 +62,16 @@ include __DIR__ . '/includes/header.php';
         <p class="hero-sub">Here&rsquo;s what&rsquo;s on your plate today.</p>
     </div>
     <div class="hero-stats">
-        <div class="stat stat-p">
-            <span class="n"><?= $byStatus['todo'] ?></span>
-            <span class="l">To do</span>
-        </div>
-        <div class="stat stat-x">
-            <span class="n"><?= $byStatus['in_progress'] ?></span>
-            <span class="l">In progress</span>
-        </div>
-        <div class="stat stat-d">
-            <span class="n"><?= $byStatus['done'] ?></span>
-            <span class="l">Done</span>
-        </div>
+        <?php if ($hasKanban): ?>
+            <?php foreach ($colStats as $cs): ?>
+                <div class="stat" style="background: <?= e($cs['color']) ?>22;">
+                    <span class="n"><?= (int)$cs['n'] ?></span>
+                    <span class="l"><?= e($cs['name']) ?></span>
+                </div>
+            <?php endforeach; ?>
+        <?php else: ?>
+            <div class="stat stat-p"><span class="n">—</span><span class="l">Run /migrate.php</span></div>
+        <?php endif; ?>
     </div>
 </section>
 
@@ -62,11 +86,11 @@ include __DIR__ . '/includes/header.php';
     </div>
 <?php else: ?>
     <ul class="task-list">
-        <?php foreach ($mine as $t): ?>
-            <li class="task status-<?= e($t['status']) ?>">
+        <?php foreach ($mine as $t): $colColor = $t['column_color'] ?? '#EC407A'; ?>
+            <li class="task" style="border-left-color: <?= e($colColor) ?>;">
                 <div class="task-head">
-                    <span class="task-status-pill pill-<?= e($t['status']) ?>">
-                        <?= e(status_label($t['status'])) ?>
+                    <span class="task-status-pill" style="background: <?= e($colColor) ?>22; color: <?= e($colColor) ?>;">
+                        <?= e($t['column_name'] ?? status_label($t['status'])) ?>
                     </span>
                     <span class="task-priority <?= e(priority_class($t['priority'])) ?>">
                         <?= e($t['priority']) ?>

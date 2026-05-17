@@ -18,6 +18,60 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_check();
     $op = $_POST['op'] ?? '';
 
+    // -------- Column management --------
+    if ($op === 'col_create') {
+        $name = trim($_POST['name'] ?? '');
+        $color = $_POST['color'] ?? '#EC407A';
+        $isDone = !empty($_POST['is_done']) ? 1 : 0;
+        if ($name === '') {
+            flash_set('error', 'Column name required.');
+            redirect('admin.php');
+        }
+        $maxPos = (int) db()->query("SELECT COALESCE(MAX(position),0)+1 FROM task_columns")->fetchColumn();
+        $stmt = db()->prepare("INSERT INTO task_columns (name, position, color, is_done) VALUES (:n, :p, :c, :d)");
+        try {
+            $stmt->execute([':n' => $name, ':p' => $maxPos, ':c' => $color, ':d' => $isDone]);
+            flash_set('ok', 'Column added.');
+        } catch (PDOException $e) {
+            flash_set('error', 'A column with that name already exists.');
+        }
+        redirect('admin.php');
+    }
+
+    if ($op === 'col_update') {
+        $cols = $_POST['col'] ?? [];
+        if (is_array($cols)) {
+            $upd = db()->prepare("UPDATE task_columns SET name=:n, position=:p, color=:c, is_done=:d WHERE id=:id");
+            foreach ($cols as $id => $row) {
+                $name = trim($row['name'] ?? '');
+                if ($name === '') continue;
+                try {
+                    $upd->execute([
+                        ':n'  => $name,
+                        ':p'  => (int)($row['position'] ?? 0),
+                        ':c'  => $row['color'] ?? '#EC407A',
+                        ':d'  => !empty($row['is_done']) ? 1 : 0,
+                        ':id' => (int)$id,
+                    ]);
+                } catch (PDOException $e) { /* keep going */ }
+            }
+            flash_set('ok', 'Columns updated.');
+        }
+        redirect('admin.php');
+    }
+
+    if ($op === 'col_delete') {
+        $id = (int)($_POST['id'] ?? 0);
+        try {
+            $del = db()->prepare("DELETE FROM task_columns WHERE id = :id");
+            $del->execute([':id' => $id]);
+            flash_set('ok', 'Column deleted.');
+        } catch (PDOException $e) {
+            flash_set('error', 'Cannot delete — column still has tasks. Move them first.');
+        }
+        redirect('admin.php');
+    }
+
     if ($op === 'create') {
         $name = trim($_POST['name'] ?? '');
         $pin  = preg_replace('/\D/', '', $_POST['pin'] ?? '');
@@ -148,6 +202,78 @@ include __DIR__ . '/includes/header.php';
         <input type="hidden" name="id" value="<?= (int)$u['id'] ?>">
     </form>
 <?php endforeach; ?>
+
+<?php
+// =========================================================================
+// Column management section
+// =========================================================================
+$cols = task_columns();
+?>
+
+<?php if ($cols): ?>
+<h2 class="section-h-spaced">Board columns</h2>
+
+<details class="card card-form">
+    <summary>Add a column</summary>
+    <form method="post">
+        <input type="hidden" name="_csrf" value="<?= e(csrf_token()) ?>">
+        <input type="hidden" name="op" value="col_create">
+        <div class="row">
+            <div class="field">
+                <label>Name</label>
+                <input name="name" required maxlength="50" placeholder="e.g. Blocked">
+            </div>
+            <div class="field">
+                <label>Color</label>
+                <input type="color" name="color" value="#EC407A">
+            </div>
+            <div class="field">
+                <label class="checkbox">
+                    <input type="checkbox" name="is_done" value="1">
+                    <span>Counts as "done"</span>
+                </label>
+            </div>
+        </div>
+        <div class="actions">
+            <button class="btn btn-primary">Add column</button>
+        </div>
+    </form>
+</details>
+
+<form method="post" class="card">
+    <input type="hidden" name="_csrf" value="<?= e(csrf_token()) ?>">
+    <input type="hidden" name="op" value="col_update">
+    <ul class="col-manager">
+        <?php foreach ($cols as $col): ?>
+            <li style="--col: <?= e($col['color']) ?>;">
+                <span class="col-dot"></span>
+                <input type="text" name="col[<?= (int)$col['id'] ?>][name]" value="<?= e($col['name']) ?>" maxlength="50">
+                <input type="color" name="col[<?= (int)$col['id'] ?>][color]" value="<?= e($col['color']) ?>" title="Colour">
+                <input type="number" name="col[<?= (int)$col['id'] ?>][position]" value="<?= (int)$col['position'] ?>" min="0" title="Order">
+                <label class="checkbox" title="Counts as done">
+                    <input type="checkbox" name="col[<?= (int)$col['id'] ?>][is_done]" value="1" <?= $col['is_done'] ? 'checked' : '' ?>>
+                    <span>Done</span>
+                </label>
+                <button type="submit" form="col-del-<?= (int)$col['id'] ?>" class="link-btn"
+                        onclick="return confirm('Delete the &quot;<?= e($col['name']) ?>&quot; column? It must be empty first.')">Delete</button>
+            </li>
+        <?php endforeach; ?>
+    </ul>
+    <div class="actions">
+        <button class="btn btn-primary">Save columns</button>
+    </div>
+</form>
+
+<?php foreach ($cols as $col): ?>
+    <form id="col-del-<?= (int)$col['id'] ?>" method="post" hidden>
+        <input type="hidden" name="_csrf" value="<?= e(csrf_token()) ?>">
+        <input type="hidden" name="op" value="col_delete">
+        <input type="hidden" name="id" value="<?= (int)$col['id'] ?>">
+    </form>
+<?php endforeach; ?>
+
+<h2 class="section-h-spaced">Team</h2>
+<?php endif; ?>
 
 <ul class="team-list">
     <?php foreach ($users as $u): $fid = 'u-edit-' . (int)$u['id']; ?>

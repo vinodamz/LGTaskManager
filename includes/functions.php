@@ -86,3 +86,29 @@ function asset_version(): string
     }
     return $v;
 }
+
+/**
+ * All task columns ordered for board rendering. Returns [] if the kanban
+ * migration hasn't run yet — callers should fall back to the list view.
+ */
+function task_columns(): array
+{
+    static $cols = null;
+    if ($cols === null) {
+        try {
+            $cols = db()->query("
+                SELECT id, name, position, color, is_done
+                FROM task_columns
+                ORDER BY position ASC, id ASC
+            ")->fetchAll();
+        } catch (Throwable $e) {
+            $cols = [];
+        }
+    }
+    return $cols;
+}
+
+function kanban_available(): bool
+{
+    return task_columns() !== [];
+}

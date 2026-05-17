@@ -427,3 +427,141 @@ h2 { font-weight: 600; font-size: 22px; }
 form.inline { display: inline; }
 .row-actions { display: flex; gap: 12px; align-items: center; }
 .checkbox { flex-direction: row !important; align-items: center; gap: 6px; cursor: pointer; }
+
+/* =========================================================
+   View toggle (Board / List)
+   ========================================================= */
+.view-toggle {
+    display: inline-flex; gap: 4px;
+    background: var(--cream-2); padding: 4px;
+    border-radius: 999px;
+}
+.view-toggle .toggle {
+    padding: 6px 16px; border-radius: 999px;
+    font-weight: 600; font-size: 13px; color: var(--ink-soft);
+    text-decoration: none;
+}
+.view-toggle .toggle.active {
+    background: #fff; color: var(--ink);
+    box-shadow: var(--shadow-card);
+}
+
+/* =========================================================
+   KANBAN BOARD
+   ========================================================= */
+.board {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(280px, 1fr);
+    gap: 14px;
+    overflow-x: auto;
+    padding-bottom: 12px;
+    /* On wider screens, columns share available width up to a sensible max */
+    scroll-snap-type: x proximity;
+}
+.board-col {
+    --col: var(--magenta);
+    background: var(--cream-2);
+    border-radius: var(--r-md);
+    padding: 14px 12px;
+    display: flex; flex-direction: column;
+    min-height: 320px;
+    scroll-snap-align: start;
+}
+.board-col-head {
+    display: flex; align-items: center; gap: 8px;
+    padding: 2px 6px 12px;
+    font-family: var(--display);
+}
+.board-col-dot {
+    width: 12px; height: 12px; border-radius: 999px;
+    background: var(--col);
+    flex: 0 0 12px;
+}
+.board-col-name {
+    flex: 1; font-weight: 600; font-size: 16px;
+    letter-spacing: -0.01em;
+}
+.board-col-count {
+    font-size: 12px; font-weight: 600;
+    background: #fff; color: var(--ink-soft);
+    padding: 2px 8px; border-radius: 999px;
+}
+.board-col-list {
+    list-style: none; padding: 4px; margin: 0;
+    display: flex; flex-direction: column; gap: 10px;
+    min-height: 80px;
+    flex: 1;
+}
+.board-card {
+    background: #fff;
+    border: 1px solid var(--line);
+    border-left: 4px solid var(--col);
+    border-radius: var(--r-sm);
+    padding: 12px 14px;
+    box-shadow: var(--shadow-card);
+    cursor: grab;
+    user-select: none;
+    transition: transform .12s ease, box-shadow .12s ease;
+}
+.board-card:hover { transform: translateY(-1px); }
+.board-card:active { cursor: grabbing; }
+.board-card-pills {
+    display: flex; gap: 6px; flex-wrap: wrap;
+    margin-bottom: 6px;
+}
+.board-card-title {
+    font-family: var(--display); font-weight: 600;
+    font-size: 16px; margin: 4px 0 6px;
+    letter-spacing: -0.01em;
+}
+.board-card-title a { color: var(--ink); }
+.board-card-title a:hover { color: var(--magenta-deep); text-decoration: none; }
+.board-card-desc {
+    margin: 0 0 8px; font-size: 13px; color: var(--ink-soft);
+    line-height: 1.4;
+}
+.board-card-foot {
+    margin: 0; font-size: 12px; color: var(--ink-soft);
+    letter-spacing: .04em;
+}
+
+/* Sortable.js helper classes */
+.board-card-ghost  { opacity: .35; background: var(--cream-2); }
+.board-card-chosen { box-shadow: 0 0 0 3px color-mix(in srgb, var(--col) 30%, transparent); }
+.board-card-drag   { transform: rotate(1.5deg); }
+
+@media (max-width: 720px) {
+    .board { grid-auto-columns: 88vw; }
+}
+
+/* =========================================================
+   Column manager (admin)
+   ========================================================= */
+.col-manager {
+    list-style: none; padding: 0; margin: 0;
+    display: flex; flex-direction: column; gap: 8px;
+}
+.col-manager li {
+    display: grid;
+    grid-template-columns: auto 1fr auto auto auto auto;
+    gap: 10px; align-items: center;
+    background: #fff; border: 1px solid var(--line);
+    border-radius: var(--r-md); padding: 10px 14px;
+}
+.col-manager .col-dot {
+    width: 14px; height: 14px; border-radius: 999px;
+    background: var(--col, var(--magenta));
+}
+.col-manager input[type=text] {
+    border: 1px solid var(--line); border-radius: 10px;
+    padding: 8px 10px; font-size: 15px; min-width: 0;
+}
+.col-manager input[type=color] {
+    width: 38px; height: 38px; padding: 0; border: 1px solid var(--line);
+    border-radius: 10px; background: #fff;
+}
+.col-manager input[type=number] {
+    width: 64px; border: 1px solid var(--line); border-radius: 10px;
+    padding: 8px 10px; font-size: 14px;
+}
