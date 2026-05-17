@@ -4,6 +4,16 @@ require_once __DIR__ . '/includes/functions.php';
 
 $me = require_admin();
 
+function pin_is_in_use(string $pin, ?int $excludeUserId = null): bool
+{
+    $stmt = db()->query("SELECT id, pin_hash FROM users");
+    foreach ($stmt as $row) {
+        if ($excludeUserId !== null && (int)$row['id'] === $excludeUserId) continue;
+        if (password_verify($pin, $row['pin_hash'])) return true;
+    }
+    return false;
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_check();
     $op = $_POST['op'] ?? '';
@@ -17,27 +27,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             redirect('admin.php');
         }
         if (!in_array($role, ['staff','admin'], true)) $role = 'staff';
-
-        // Check PIN uniqueness — required because PIN alone is the credential.
         if (pin_is_in_use($pin)) {
             flash_set('error', 'That PIN is already in use. Pick another.');
             redirect('admin.php');
         }
 
         $stmt = db()->prepare("INSERT INTO users (name, pin_hash, role) VALUES (:n, :h, :r)");
-        $stmt->execute([
-            ':n' => $name,
-            ':h' => password_hash($pin, PASSWORD_DEFAULT),
-            ':r' => $role,
-        ]);
-        flash_set('ok', "User created. PIN: $pin");
+        $stmt->execute([':n' => $name, ':h' => password_hash($pin, PASSWORD_DEFAULT), ':r' => $role]);
+        flash_set('ok', "User added. Their PIN is $pin — share it with them privately.");
         redirect('admin.php');
     }
 
     if ($op === 'update') {
         $id     = (int)($_POST['id'] ?? 0);
         $name   = trim($_POST['name'] ?? '');
-        $role   = $_POST['role']   ?? 'staff';
+        $role   = $_POST['role'] ?? 'staff';
         $active = !empty($_POST['active']) ? 1 : 0;
         $newPin = preg_replace('/\D/', '', $_POST['pin'] ?? '');
 
@@ -60,17 +64,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 flash_set('error', 'That PIN is already in use.');
                 redirect('admin.php');
             }
-            $stmt = db()->prepare("
-                UPDATE users SET name=:n, role=:r, active=:a, pin_hash=:h WHERE id=:id
-            ");
+            $stmt = db()->prepare("UPDATE users SET name=:n, role=:r, active=:a, pin_hash=:h WHERE id=:id");
             $stmt->execute([
                 ':n' => $name, ':r' => $role, ':a' => $active,
                 ':h' => password_hash($newPin, PASSWORD_DEFAULT), ':id' => $id,
             ]);
         } else {
-            $stmt = db()->prepare("
-                UPDATE users SET name=:n, role=:r, active=:a WHERE id=:id
-            ");
+            $stmt = db()->prepare("UPDATE users SET name=:n, role=:r, active=:a WHERE id=:id");
             $stmt->execute([':n' => $name, ':r' => $role, ':a' => $active, ':id' => $id]);
         }
         flash_set('ok', 'User updated.');
@@ -94,46 +94,47 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-function pin_is_in_use(string $pin, ?int $excludeUserId = null): bool
-{
-    $stmt = db()->query("SELECT id, pin_hash FROM users");
-    foreach ($stmt as $row) {
-        if ($excludeUserId !== null && (int)$row['id'] === $excludeUserId) continue;
-        if (password_verify($pin, $row['pin_hash'])) return true;
-    }
-    return false;
-}
-
 $users = db()->query("SELECT id, name, role, active, created_at FROM users ORDER BY name")->fetchAll();
 
-$pageTitle = 'Users — LG Task Manager';
+$pageTitle = 'Team — LG Task Manager';
 include __DIR__ . '/includes/header.php';
 ?>
 
-<h1>Users</h1>
+<div class="actionbar">
+    <h1>Team</h1>
+</div>
 
-<details class="task-form" open>
-    <summary>+ Add user</summary>
+<details class="card card-form" open>
+    <summary>Add a teammate</summary>
     <form method="post">
         <input type="hidden" name="_csrf" value="<?= e(csrf_token()) ?>">
         <input type="hidden" name="op" value="create">
         <div class="row">
-            <label>Name<input name="name" required maxlength="100"></label>
-            <label>PIN (4–6 digits)
-                <input name="pin" inputmode="numeric" pattern="[0-9]{4,6}" maxlength="6" required>
-            </label>
-            <label>Role
+            <div class="field">
+                <label>Name</label>
+                <input name="name" required maxlength="100" placeholder="e.g. Priya Sharma">
+            </div>
+            <div class="field">
+                <label>PIN (4–6 digits)</label>
+                <input name="pin" inputmode="numeric" pattern="[0-9]{4,6}" maxlength="6" required placeholder="e.g. 1234">
+            </div>
+            <div class="field">
+                <label>Role</label>
                 <select name="role">
                     <option value="staff">Staff</option>
                     <option value="admin">Admin</option>
                 </select>
-            </label>
+            </div>
         </div>
-        <button class="btn btn-primary">Add user</button>
+        <div class="actions">
+            <button class="btn btn-primary">Add teammate</button>
+        </div>
     </form>
 </details>
 
-<!-- Forms declared outside the table; inputs reference them via the HTML5 `form` attribute. -->
+<h2 class="section-h-spaced">Active &amp; inactive</h2>
+
+<!-- Edit + delete forms declared outside the row, referenced by `form` attribute. -->
 <?php foreach ($users as $u): ?>
     <form id="u-edit-<?= (int)$u['id'] ?>" method="post" hidden>
         <input type="hidden" name="_csrf" value="<?= e(csrf_token()) ?>">
@@ -148,34 +149,35 @@ include __DIR__ . '/includes/header.php';
     </form>
 <?php endforeach; ?>
 
-<table class="tasks">
-    <thead><tr><th>Name</th><th>Role</th><th>Active</th><th>Created</th><th>New PIN</th><th></th></tr></thead>
-    <tbody>
+<ul class="team-list">
     <?php foreach ($users as $u): $fid = 'u-edit-' . (int)$u['id']; ?>
-        <tr>
-            <td><input form="<?= $fid ?>" name="name" value="<?= e($u['name']) ?>" maxlength="100"></td>
-            <td>
-                <select form="<?= $fid ?>" name="role">
+        <li class="team-row" style="--card: <?= e(user_color((int)$u['id'])) ?>;">
+            <div class="team-dot"><?= e(user_initials($u['name'])) ?></div>
+            <div>
+                <div class="team-name"><?= e($u['name']) ?></div>
+                <div class="team-meta">
+                    <?= e($u['role']) ?>
+                    · <?= $u['active'] ? 'active' : 'inactive' ?>
+                    · since <?= e(substr((string)$u['created_at'], 0, 10)) ?>
+                </div>
+            </div>
+            <div class="team-edit">
+                <input form="<?= $fid ?>" name="name" value="<?= e($u['name']) ?>" maxlength="100" aria-label="Name">
+                <select form="<?= $fid ?>" name="role" aria-label="Role">
                     <option value="staff" <?= $u['role'] === 'staff' ? 'selected' : '' ?>>Staff</option>
                     <option value="admin" <?= $u['role'] === 'admin' ? 'selected' : '' ?>>Admin</option>
                 </select>
-            </td>
-            <td>
-                <label class="checkbox">
+                <label class="checkbox" title="Active">
                     <input form="<?= $fid ?>" type="checkbox" name="active" value="1" <?= $u['active'] ? 'checked' : '' ?>>
+                    <span>Active</span>
                 </label>
-            </td>
-            <td><?= e($u['created_at']) ?></td>
-            <td>
-                <input form="<?= $fid ?>" name="pin" inputmode="numeric" pattern="[0-9]{4,6}" maxlength="6" placeholder="leave blank">
-            </td>
-            <td class="row-actions">
+                <input form="<?= $fid ?>" name="pin" inputmode="numeric" pattern="[0-9]{4,6}" maxlength="6"
+                       placeholder="New PIN" aria-label="New PIN">
                 <button class="btn" form="<?= $fid ?>">Save</button>
                 <button class="link-btn" form="u-del-<?= (int)$u['id'] ?>">Delete</button>
-            </td>
-        </tr>
+            </div>
+        </li>
     <?php endforeach; ?>
-    </tbody>
-</table>
+</ul>
 
 <?php include __DIR__ . '/includes/footer.php'; ?>

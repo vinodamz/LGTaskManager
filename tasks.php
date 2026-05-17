@@ -3,7 +3,6 @@ require_once __DIR__ . '/includes/auth.php';
 require_once __DIR__ . '/includes/functions.php';
 
 $user = require_login();
-$action = $_GET['action'] ?? 'list';
 
 // ------------- POST handlers -------------
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -23,8 +22,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             flash_set('error', 'Title is required.');
             redirect('tasks.php');
         }
-        if (!in_array($status, ['todo','in_progress','done'], true))      $status = 'todo';
-        if (!in_array($priority, ['low','normal','high'], true))          $priority = 'normal';
+        if (!in_array($status,   ['todo','in_progress','done'], true)) $status   = 'todo';
+        if (!in_array($priority, ['low','normal','high'],       true)) $priority = 'normal';
 
         if ($op === 'create') {
             $stmt = db()->prepare("
@@ -32,10 +31,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                    assigned_to_user_id, created_by_user_id)
                 VALUES (:t, :d, :s, :p, :due, :a, :c)
             ");
-            $stmt->execute([
-                ':t' => $title, ':d' => $description, ':s' => $status, ':p' => $priority,
-                ':due' => $due, ':a' => $assignee, ':c' => $user['id'],
-            ]);
+            $stmt->execute([':t' => $title, ':d' => $description, ':s' => $status, ':p' => $priority,
+                            ':due' => $due, ':a' => $assignee, ':c' => $user['id']]);
             flash_set('ok', 'Task created.');
         } else {
             $stmt = db()->prepare("
@@ -43,10 +40,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                  due_date=:due, assigned_to_user_id=:a
                 WHERE id=:id
             ");
-            $stmt->execute([
-                ':t' => $title, ':d' => $description, ':s' => $status, ':p' => $priority,
-                ':due' => $due, ':a' => $assignee, ':id' => $id,
-            ]);
+            $stmt->execute([':t' => $title, ':d' => $description, ':s' => $status, ':p' => $priority,
+                            ':due' => $due, ':a' => $assignee, ':id' => $id]);
             flash_set('ok', 'Task updated.');
         }
         redirect('tasks.php');
@@ -66,7 +61,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (!in_array($s, ['todo','in_progress','done'], true)) $s = 'todo';
         $stmt = db()->prepare("UPDATE tasks SET status = :s WHERE id = :id");
         $stmt->execute([':s' => $s, ':id' => $id]);
-        redirect('tasks.php' . (isset($_POST['return']) ? '?' . $_POST['return'] : ''));
+        redirect('tasks.php' . (!empty($_POST['return']) ? '?' . $_POST['return'] : ''));
     }
 }
 
@@ -110,7 +105,8 @@ $sql = "
     LEFT JOIN users u ON u.id = t.assigned_to_user_id
     LEFT JOIN users c ON c.id = t.created_by_user_id
     $whereSql
-    ORDER BY t.status = 'done', (t.due_date IS NULL), t.due_date ASC, t.priority DESC, t.id DESC
+    ORDER BY t.status = 'done', (t.due_date IS NULL), t.due_date ASC,
+             FIELD(t.priority,'high','normal','low'), t.id DESC
 ";
 $stmt = db()->prepare($sql);
 $stmt->execute($params);
@@ -120,10 +116,12 @@ $pageTitle = 'Tasks — LG Task Manager';
 include __DIR__ . '/includes/header.php';
 ?>
 
-<h1>Tasks</h1>
+<div class="actionbar">
+    <h1>Tasks</h1>
+</div>
 
 <form class="filters" method="get">
-    <input type="search" name="q" placeholder="Search…" value="<?= e($search) ?>">
+    <input type="search" name="q" placeholder="Search tasks…" value="<?= e($search) ?>">
     <select name="status">
         <option value="">Any status</option>
         <?php foreach (['todo','in_progress','done'] as $s): ?>
@@ -140,11 +138,11 @@ include __DIR__ . '/includes/header.php';
         <?php endforeach; ?>
     </select>
     <button class="btn">Filter</button>
-    <a class="btn" href="tasks.php">Reset</a>
+    <a class="btn btn-ghost" href="tasks.php">Reset</a>
 </form>
 
-<details class="task-form" <?= $editing ? 'open' : '' ?>>
-    <summary><?= $editing ? 'Edit task' : '+ New task' ?></summary>
+<details class="card card-form" <?= $editing ? 'open' : '' ?>>
+    <summary><?= $editing ? 'Edit task' : 'New task' ?></summary>
     <form method="post">
         <input type="hidden" name="_csrf" value="<?= e(csrf_token()) ?>">
         <input type="hidden" name="op" value="<?= $editing ? 'update' : 'create' ?>">
@@ -152,16 +150,19 @@ include __DIR__ . '/includes/header.php';
             <input type="hidden" name="id" value="<?= (int)$editing['id'] ?>">
         <?php endif; ?>
 
-        <label>Title
+        <div class="field">
+            <label>Title</label>
             <input name="title" required maxlength="200" value="<?= e($editing['title'] ?? '') ?>">
-        </label>
+        </div>
 
-        <label>Description
+        <div class="field">
+            <label>Description</label>
             <textarea name="description" rows="3"><?= e($editing['description'] ?? '') ?></textarea>
-        </label>
+        </div>
 
         <div class="row">
-            <label>Status
+            <div class="field">
+                <label>Status</label>
                 <select name="status">
                     <?php foreach (['todo','in_progress','done'] as $s): ?>
                         <option value="<?= $s ?>" <?= ($editing['status'] ?? 'todo') === $s ? 'selected' : '' ?>>
@@ -169,9 +170,10 @@ include __DIR__ . '/includes/header.php';
                         </option>
                     <?php endforeach; ?>
                 </select>
-            </label>
+            </div>
 
-            <label>Priority
+            <div class="field">
+                <label>Priority</label>
                 <select name="priority">
                     <?php foreach (['low','normal','high'] as $p): ?>
                         <option value="<?= $p ?>" <?= ($editing['priority'] ?? 'normal') === $p ? 'selected' : '' ?>>
@@ -179,13 +181,15 @@ include __DIR__ . '/includes/header.php';
                         </option>
                     <?php endforeach; ?>
                 </select>
-            </label>
+            </div>
 
-            <label>Due date
+            <div class="field">
+                <label>Due date</label>
                 <input type="date" name="due_date" value="<?= e($editing['due_date'] ?? '') ?>">
-            </label>
+            </div>
 
-            <label>Assigned to
+            <div class="field">
+                <label>Assigned to</label>
                 <select name="assigned_to_user_id">
                     <option value="">— Unassigned —</option>
                     <?php foreach ($users as $u): ?>
@@ -195,38 +199,46 @@ include __DIR__ . '/includes/header.php';
                         </option>
                     <?php endforeach; ?>
                 </select>
-            </label>
+            </div>
         </div>
 
         <div class="actions">
             <button class="btn btn-primary"><?= $editing ? 'Save' : 'Create task' ?></button>
             <?php if ($editing): ?>
-                <a class="btn" href="tasks.php">Cancel</a>
+                <a class="btn btn-ghost" href="tasks.php">Cancel</a>
             <?php endif; ?>
         </div>
     </form>
 </details>
 
 <?php if (!$tasks): ?>
-    <p class="muted">No tasks match your filters.</p>
+    <div class="empty">No tasks match your filters.</div>
 <?php else: ?>
-    <table class="tasks">
-        <thead>
-            <tr>
-                <th>Title</th><th>Status</th><th>Priority</th>
-                <th>Due</th><th>Assignee</th><th>Created by</th><th></th>
-            </tr>
-        </thead>
-        <tbody>
+    <ul class="task-list">
         <?php foreach ($tasks as $t): ?>
-            <tr class="task-row status-<?= e($t['status']) ?>">
-                <td>
-                    <a href="tasks.php?edit=<?= (int)$t['id'] ?>"><?= e($t['title']) ?></a>
-                    <?php if (!empty($t['description'])): ?>
-                        <div class="desc"><?= nl2br(e($t['description'])) ?></div>
+            <li class="task status-<?= e($t['status']) ?>">
+                <div class="task-head">
+                    <span class="task-status-pill pill-<?= e($t['status']) ?>">
+                        <?= e(status_label($t['status'])) ?>
+                    </span>
+                    <span class="task-priority <?= e(priority_class($t['priority'])) ?>">
+                        <?= e($t['priority']) ?>
+                    </span>
+                    <?php if (!empty($t['due_date'])): ?>
+                        <span class="task-due">Due <?= e($t['due_date']) ?></span>
                     <?php endif; ?>
-                </td>
-                <td>
+                </div>
+                <h3 class="task-title">
+                    <a href="tasks.php?edit=<?= (int)$t['id'] ?>"><?= e($t['title']) ?></a>
+                </h3>
+                <?php if (!empty($t['description'])): ?>
+                    <p class="task-desc"><?= nl2br(e($t['description'])) ?></p>
+                <?php endif; ?>
+                <p class="task-by">
+                    <?= e($t['assignee_name'] ? 'Assigned to ' . $t['assignee_name'] : 'Unassigned') ?>
+                    · created by <?= e($t['creator_name'] ?? '—') ?>
+                </p>
+                <div class="task-actions">
                     <form method="post" class="inline">
                         <input type="hidden" name="_csrf" value="<?= e(csrf_token()) ?>">
                         <input type="hidden" name="op" value="quick_status">
@@ -240,24 +252,17 @@ include __DIR__ . '/includes/header.php';
                             <?php endforeach; ?>
                         </select>
                     </form>
-                </td>
-                <td class="<?= priority_class($t['priority']) ?>"><?= e($t['priority']) ?></td>
-                <td><?= e($t['due_date'] ?: '—') ?></td>
-                <td><?= e($t['assignee_name'] ?: '—') ?></td>
-                <td><?= e($t['creator_name'] ?: '—') ?></td>
-                <td class="row-actions">
-                    <a href="tasks.php?edit=<?= (int)$t['id'] ?>">Edit</a>
+                    <a class="btn btn-ghost" href="tasks.php?edit=<?= (int)$t['id'] ?>">Edit</a>
                     <form method="post" class="inline" onsubmit="return confirm('Delete this task?')">
                         <input type="hidden" name="_csrf" value="<?= e(csrf_token()) ?>">
                         <input type="hidden" name="op" value="delete">
                         <input type="hidden" name="id" value="<?= (int)$t['id'] ?>">
                         <button class="link-btn">Delete</button>
                     </form>
-                </td>
-            </tr>
+                </div>
+            </li>
         <?php endforeach; ?>
-        </tbody>
-    </table>
+    </ul>
 <?php endif; ?>
 
 <?php include __DIR__ . '/includes/footer.php'; ?>

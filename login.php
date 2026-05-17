@@ -1,51 +1,178 @@
 <?php
+/**
+ * login.php — dual purpose
+ *
+ * GET  → renders the profile-card landing page + PIN modal numpad UI
+ * POST → AJAX endpoint. Expects { user_id, pin, _csrf }.
+ *        Returns JSON { ok: true, redirect } on success
+ *        or       JSON { ok: false, error } on failure.
+ */
+declare(strict_types=1);
+
 require_once __DIR__ . '/includes/auth.php';
 require_once __DIR__ . '/includes/functions.php';
 
 start_session_once();
 
 if (current_user()) {
+    if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+        header('Content-Type: application/json');
+        echo json_encode(['ok' => true, 'redirect' => 'index.php']);
+        exit;
+    }
     redirect('index.php');
 }
 
-$error = null;
-
+// ---------- POST: AJAX PIN verification ---------------------
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    csrf_check();
-    $pin = $_POST['pin'] ?? '';
-    $user = login_by_pin($pin);
-    if ($user) {
-        redirect('index.php');
+    header('Content-Type: application/json; charset=utf-8');
+
+    $sent = $_POST['_csrf'] ?? '';
+    if (!hash_equals($_SESSION['_csrf'] ?? '', $sent)) {
+        http_response_code(400);
+        echo json_encode(['ok' => false, 'error' => 'Session expired — refresh the page.']);
+        exit;
     }
-    $now = time();
-    $lockUntil = $_SESSION['_pin_lock_until'] ?? 0;
+
+    $userId = isset($_POST['user_id']) ? (int)$_POST['user_id'] : 0;
+    $pin    = preg_replace('/\D/', '', $_POST['pin'] ?? '');
+    $cfg    = app_config();
+
+    // rate limit
+    $now       = time();
+    $tries     = (int)($_SESSION['_pin_tries'] ?? 0);
+    $lockUntil = (int)($_SESSION['_pin_lock_until'] ?? 0);
     if ($lockUntil > $now) {
-        $error = 'Too many wrong PINs. Try again in ' . ($lockUntil - $now) . 's.';
-    } else {
-        $error = 'PIN not recognised.';
+        http_response_code(429);
+        echo json_encode(['ok' => false, 'error' => 'Too many tries. Wait ' . ($lockUntil - $now) . 's.']);
+        exit;
     }
+
+    if ($userId <= 0 || strlen($pin) < 4 || strlen($pin) > 6) {
+        http_response_code(400);
+        echo json_encode(['ok' => false, 'error' => 'Enter a 4–6 digit PIN.']);
+        exit;
+    }
+
+    $stmt = db()->prepare("SELECT id, name, role, pin_hash FROM users WHERE id = :id AND active = 1");
+    $stmt->execute([':id' => $userId]);
+    $u = $stmt->fetch();
+
+    if (!$u || !password_verify($pin, $u['pin_hash'])) {
+        // jitter to flatten timing
+        usleep(random_int(120000, 280000));
+        $tries++;
+        $_SESSION['_pin_tries'] = $tries;
+        if ($tries >= ($cfg['app']['max_pin_tries'] ?? 5)) {
+            $_SESSION['_pin_lock_until'] = $now + ($cfg['app']['lock_seconds'] ?? 30);
+            $_SESSION['_pin_tries'] = 0;
+        }
+        http_response_code(401);
+        echo json_encode(['ok' => false, 'error' => 'Wrong PIN']);
+        exit;
+    }
+
+    if (password_needs_rehash($u['pin_hash'], PASSWORD_DEFAULT)) {
+        $upd = db()->prepare("UPDATE users SET pin_hash = :h WHERE id = :id");
+        $upd->execute([':h' => password_hash($pin, PASSWORD_DEFAULT), ':id' => $u['id']]);
+    }
+
+    session_regenerate_id(true);
+    $_SESSION['user_id']         = (int)$u['id'];
+    $_SESSION['user_name']       = $u['name'];
+    $_SESSION['user_role']       = $u['role'];
+    $_SESSION['_pin_tries']      = 0;
+    $_SESSION['_pin_lock_until'] = 0;
+
+    echo json_encode(['ok' => true, 'redirect' => 'index.php']);
+    exit;
 }
 
-$pageTitle = 'Sign in — LG Task Manager';
-include __DIR__ . '/includes/header.php';
+// ---------- GET: render landing -----------------------------
+$users = db()->query("
+    SELECT id, name, role
+    FROM users
+    WHERE active = 1
+    ORDER BY (role = 'admin') DESC, name ASC
+")->fetchAll();
+
+$cfg = app_config();
 ?>
-<div class="login-card">
-    <h1>Enter your PIN</h1>
-    <?php if ($error): ?><div class="flash flash-error"><?= e($error) ?></div><?php endif; ?>
-    <form method="post" autocomplete="off">
-        <input type="hidden" name="_csrf" value="<?= e(csrf_token()) ?>">
-        <input
-            type="password"
-            inputmode="numeric"
-            pattern="[0-9]{4,6}"
-            maxlength="6"
-            name="pin"
-            placeholder="4-6 digit PIN"
-            autofocus
-            required
-            class="pin-input"
-        >
-        <button type="submit" class="btn btn-primary">Sign in</button>
-    </form>
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="theme-color" content="#FFF8F0">
+    <title>Sign in — <?= e($cfg['app']['name']) ?></title>
+    <link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body class="landing">
+
+<header class="topbar">
+    <a href="login.php" class="brand">
+        <img src="assets/img/logo.png" alt="" class="brand-logo">
+        <span class="brand-mark"><?= e($cfg['app']['name']) ?></span>
+    </a>
+    <div class="topbar-date muted"><?= e(date('l, j M')) ?></div>
+</header>
+
+<main class="landing-main">
+    <h1 class="landing-title">Who&rsquo;s here?</h1>
+    <p class="landing-sub">Tap your name to sign in.</p>
+
+    <?php if (!$users): ?>
+        <div class="empty">
+            <p>No active staff yet. Open <code>install.php</code> to create the first admin.</p>
+        </div>
+    <?php else: ?>
+        <ul class="profile-grid" role="list">
+            <?php foreach ($users as $u): ?>
+                <li>
+                    <button type="button"
+                            class="profile-card"
+                            data-uid="<?= (int)$u['id'] ?>"
+                            data-name="<?= e($u['name']) ?>"
+                            style="--card: <?= e(user_color((int)$u['id'])) ?>">
+                        <span class="profile-avatar">
+                            <?= e(user_initials($u['name'])) ?>
+                        </span>
+                        <span class="profile-meta">
+                            <span class="profile-name"><?= e($u['name']) ?></span>
+                            <span class="profile-role"><?= e($u['role']) ?></span>
+                        </span>
+                    </button>
+                </li>
+            <?php endforeach; ?>
+        </ul>
+    <?php endif; ?>
+</main>
+
+<div class="pin-overlay" id="pinOverlay" hidden>
+    <div class="pin-modal" role="dialog" aria-modal="true" aria-labelledby="pinHello">
+        <button class="pin-close" type="button" aria-label="Close" id="pinClose">&times;</button>
+        <p class="pin-hello" id="pinHello">Hi —</p>
+        <p class="pin-prompt">Enter your PIN</p>
+
+        <div class="pin-dots" id="pinDots">
+            <span></span><span></span><span></span><span></span><span></span><span></span>
+        </div>
+        <p class="pin-error" id="pinError">&nbsp;</p>
+
+        <div class="numpad" id="numpad">
+            <?php foreach ([1,2,3,4,5,6,7,8,9] as $n): ?>
+                <button type="button" class="key" data-k="<?= $n ?>"><?= $n ?></button>
+            <?php endforeach; ?>
+            <button type="button" class="key key-ghost" data-k="clear">Clear</button>
+            <button type="button" class="key" data-k="0">0</button>
+            <button type="button" class="key key-ghost" data-k="back">←</button>
+        </div>
+    </div>
 </div>
-<?php include __DIR__ . '/includes/footer.php'; ?>
+
+<script>
+    window.LGTM_CSRF = <?= json_encode(csrf_token()) ?>;
+</script>
+<script src="assets/js/login.js"></script>
+</body>
+</html>

@@ -37,5 +37,37 @@ function status_label(string $s): string
 
 function priority_class(string $p): string
 {
-    return "p-$p";
+    return "priority-$p";
+}
+
+/**
+ * Pick a stable brand colour for a user, based on their id.
+ * Used to tint profile avatars / team dots.
+ */
+function user_color(int $id): string
+{
+    static $palette = ['#EC407A', '#5BA547', '#F5B342', '#2D6BA0', '#A05C7B', '#5DA8A2', '#E07A5F', '#7E57C2'];
+    return $palette[$id % count($palette)];
+}
+
+/**
+ * One- or two-letter initials from a display name.
+ */
+function user_initials(string $name): string
+{
+    $name = trim($name);
+    if ($name === '') return '?';
+    $parts = preg_split('/\s+/', $name);
+    if (count($parts) === 1) {
+        return mb_strtoupper(mb_substr($parts[0], 0, 1));
+    }
+    return mb_strtoupper(
+        mb_substr($parts[0], 0, 1) . mb_substr(end($parts), 0, 1)
+    );
+}
+
+function first_name(string $name): string
+{
+    $parts = preg_split('/\s+/', trim($name));
+    return $parts[0] ?? $name;
 }

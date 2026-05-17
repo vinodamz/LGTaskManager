@@ -33,3 +33,4 @@ includes/config.php
 
 # Logs
 *.log
+.design-import/
