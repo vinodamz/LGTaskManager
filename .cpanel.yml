@@ -1,12 +1,11 @@
 ---
 # cPanel deployment recipe.
-# IMPORTANT: cPanel runs each task in its own subshell — env vars do NOT
-# persist between tasks. Also: keep the rsync invocation on ONE PHYSICAL LINE
-# — YAML's folded scalar (>-) preserves newlines on more-indented continuation
-# lines, which silently corrupted earlier deploys (rsync saw `./` as its own
-# command and skipped the actual sync).
+# IMPORTANT: keep the rsync invocation on ONE PHYSICAL LINE — YAML's folded
+# scalar (>-) preserves newlines on more-indented continuation lines, which
+# silently corrupts deploys.
 deployment:
   tasks:
-    - /usr/bin/rsync -av --checksum --no-perms --no-times --omit-dir-times --exclude='.git/' --exclude='.github/' --exclude='.gitignore' --exclude='.cpanel.yml' --exclude='README.md' --exclude='DEPLOY.md' --exclude='CICD.md' --exclude='includes/config.php' ./ $HOME/thelittlegraduates.in/lgtaskmanager/ > $HOME/last-lgtm-deploy.log 2>&1
+    - /usr/bin/rsync -av --checksum --no-perms --omit-dir-times --exclude='.git/' --exclude='.github/' --exclude='.gitignore' --exclude='.cpanel.yml' --exclude='README.md' --exclude='DEPLOY.md' --exclude='CICD.md' --exclude='includes/config.php' ./ $HOME/thelittlegraduates.in/lgtaskmanager/ > $HOME/last-lgtm-deploy.log 2>&1
+    - /usr/bin/find $HOME/thelittlegraduates.in/lgtaskmanager/ -name '*.php' -exec /usr/bin/touch {} +
     - /bin/cp $HOME/last-lgtm-deploy.log $HOME/thelittlegraduates.in/lgtaskmanager/last-deploy.log
     - /bin/rm -f $HOME/thelittlegraduates.in/lgtaskmanager/whoami.php $HOME/thelittlegraduates.in/lgtaskmanager/probe.txt $HOME/thelittlegraduates.in/lgtaskmanager/probe-nested.txt $HOME/thelittlegraduates.in/lgtaskmanager/probe-bare.txt $HOME/whoami.php $HOME/lgtaskmanager/whoami.php $HOME/lgtaskmanager/probe.txt $HOME/lgtaskmanager/probe-bare.txt

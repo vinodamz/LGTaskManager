@@ -150,9 +150,19 @@ function days_mask_label(int $mask): string
 /**
  * Materialise today's instance for every active recurrence whose rule
  * matches today and which doesn't already have an instance for today.
- * Idempotent — safe to call on every page load.
+ * Idempotent — safe to call on every page load. Errors are logged and
+ * swallowed so a temporary DB issue can never take down the whole page.
  */
 function materialize_recurrences(): void
+{
+    try {
+        _materialize_recurrences_inner();
+    } catch (Throwable $e) {
+        error_log('[lgtm] materialize_recurrences failed: ' . $e->getMessage());
+    }
+}
+
+function _materialize_recurrences_inner(): void
 {
     if (!recurrence_available()) return;
 
