@@ -1,8 +1,7 @@
 ---
 # cPanel deployment recipe.
-# IMPORTANT: cPanel runs each task in its own subshell — environment variables
-# do NOT persist between tasks. Either inline everything in one task, or chain
-# with && in a single task. Here we use a single task with $HOME inlined.
+# IMPORTANT: cPanel runs each task in its own subshell — env vars do NOT
+# persist between tasks. Inline everything in one task.
 deployment:
   tasks:
-    - /usr/bin/rsync -av --no-perms --no-times --omit-dir-times --exclude='.git/' --exclude='.github/' --exclude='.gitignore' --exclude='.cpanel.yml' --exclude='README.md' --exclude='DEPLOY.md' --exclude='CICD.md' --exclude='includes/config.php' ./ $HOME/thelittlegraduates.in/lgtaskmanager/ > $HOME/last-lgtm-deploy.log 2>&1 && echo "deployed to $HOME/thelittlegraduates.in/lgtaskmanager/" >> $HOME/last-lgtm-deploy.log
+    - /bin/echo "DOCROOT=NESTED-$(date +%s)" > $HOME/thelittlegraduates.in/lgtaskmanager/probe-nested.txt && /bin/mkdir -p $HOME/lgtaskmanager && /bin/echo "DOCROOT=BARE-$(date +%s)" > $HOME/lgtaskmanager/probe-bare.txt && /usr/bin/rsync -av --no-perms --no-times --omit-dir-times --exclude='.git/' --exclude='.github/' --exclude='.gitignore' --exclude='.cpanel.yml' --exclude='README.md' --exclude='DEPLOY.md' --exclude='CICD.md' --exclude='includes/config.php' ./ $HOME/thelittlegraduates.in/lgtaskmanager/ > $HOME/last-lgtm-deploy.log 2>&1 && echo "deployed to $HOME/thelittlegraduates.in/lgtaskmanager/" >> $HOME/last-lgtm-deploy.log
