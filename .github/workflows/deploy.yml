@@ -82,7 +82,7 @@ jobs:
           echo "::group::Files actually in the deploy dir"
           curl -sS "https://${CPANEL_HOST_CLEAN}:2083/execute/Fileman/list_files?dir=%2Fhome%2F${CPANEL_USER}%2Fthelittlegraduates.in%2Flgtaskmanager&include_hidden=1" \
             -H "Authorization: cpanel ${CPANEL_USER}:${CPANEL_TOKEN}" \
-          | jq '(.data // {}) | (.files // .) | map({file, size, mtime})' 2>&1 | head -80
+          | jq '.data[] | {file, size, mtime}' 2>&1 | head -120
           echo "::endgroup::"
 
           echo "::group::Tail of last-lgtm-deploy.log on the server"
