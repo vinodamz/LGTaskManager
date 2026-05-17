@@ -17,5 +17,16 @@ function db(): PDO
         PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
         PDO::ATTR_EMULATE_PREPARES   => false,
     ]);
+
+    // Align the MySQL session timezone with the PHP timezone so CURDATE()
+    // and NOW() agree with PHP's date(). Hostgator's MySQL runs in US time
+    // but the app is Asia/Kolkata, which made today's CURDATE() lag by ~12h.
+    $offset = (new DateTime('now', new DateTimeZone(date_default_timezone_get())))->format('P'); // e.g. +05:30
+    try {
+        $pdo->exec("SET time_zone = '{$offset}'");
+    } catch (Throwable $e) {
+        // If the server rejects the offset for some reason, fall back silently —
+        // queries still work, just with the original tz drift.
+    }
     return $pdo;
 }
