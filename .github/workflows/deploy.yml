@@ -68,3 +68,4 @@ jobs:
             | tee /tmp/deploy.json
           jq -e '.status == 1' /tmp/deploy.json > /dev/null || (cat /tmp/deploy.json; exit 1)
 
+
