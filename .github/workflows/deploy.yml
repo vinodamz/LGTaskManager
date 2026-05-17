@@ -68,22 +68,3 @@ jobs:
             | tee /tmp/deploy.json
           jq -e '.status == 1' /tmp/deploy.json > /dev/null || (cat /tmp/deploy.json; exit 1)
 
-      - name: Diagnose — list domains and their actual docroots
-        run: |
-          set -e
-          curl -sS --fail-with-body \
-            "https://${CPANEL_HOST_CLEAN}:2083/execute/DomainInfo/list_domains" \
-            -H "Authorization: cpanel ${CPANEL_USER}:${CPANEL_TOKEN}" \
-            -o /tmp/domains.json
-          echo "--- main domain ---"
-          jq -r '.data.main_domain' /tmp/domains.json
-          echo "--- addon + parked + sub domains ---"
-          jq -r '.data | (.addon_domains, .parked_domains, .sub_domains)[]' /tmp/domains.json
-          echo "--- per-domain docroots ---"
-          # docroot list via separate API
-          curl -sS --fail-with-body \
-            "https://${CPANEL_HOST_CLEAN}:2083/execute/DomainInfo/domains_data?return_https_redirect_status=0" \
-            -H "Authorization: cpanel ${CPANEL_USER}:${CPANEL_TOKEN}" \
-            -o /tmp/data.json
-          jq -r '.data | to_entries[] | "\(.key) -> \(.value.documentroot // .value.document_root // (.value | tostring))"' /tmp/data.json 2>/dev/null \
-            || jq '.' /tmp/data.json

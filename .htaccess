@@ -9,9 +9,9 @@ DirectoryIndex index.php
 # Disable directory listings
 Options -Indexes
 
-# Force HTTPS (uncomment after SSL is active on the subdomain)
-# RewriteCond %{HTTPS} off
-# RewriteRule ^(.*)$ https://%{HTTP_HOST}/$1 [R=301,L]
+# Force HTTPS
+RewriteCond %{HTTPS} off
+RewriteRule ^(.*)$ https://%{HTTP_HOST}/$1 [R=301,L]
 
 # Basic security headers
 <IfModule mod_headers.c>

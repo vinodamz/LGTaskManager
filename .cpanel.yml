@@ -1,23 +1,19 @@
 ---
+# cPanel deployment recipe.
+# IMPORTANT: cPanel runs each task in its own subshell — env vars do NOT
+# persist between tasks. Inline everything in one task.
 deployment:
   tasks:
     - >-
-      WHOAMI='<?php header("Content-Type: text/plain"); echo "FILE=".__FILE__."\nDOCROOT=".$_SERVER["DOCUMENT_ROOT"]."\nHOST=".($_SERVER["HTTP_HOST"]??"")."\nSCRIPT_FILENAME=".$_SERVER["SCRIPT_FILENAME"];';
-      for P in
-        "$HOME/thelittlegraduates.in/lgtaskmanager"
-        "$HOME/lgtaskmanager"
-        "$HOME/public_html/lgtaskmanager.thelittlegraduates.in"
-        "$HOME/public_html/lgtaskmanager"
-        "$HOME/public_html/thelittlegraduates.in/lgtaskmanager"
-        "$HOME/lgtaskmanager.thelittlegraduates.in"
-        "$HOME"
-        "$HOME/public_html";
-      do
-        /bin/mkdir -p "$P" 2>/dev/null;
-        /bin/echo "$WHOAMI" > "$P/whoami.php" 2>/dev/null;
-      done;
+      DEPLOYPATH=$HOME/thelittlegraduates.in/lgtaskmanager/;
       /usr/bin/rsync -av --no-perms --no-times --omit-dir-times
         --exclude='.git/' --exclude='.github/' --exclude='.gitignore'
         --exclude='.cpanel.yml' --exclude='README.md' --exclude='DEPLOY.md'
         --exclude='CICD.md' --exclude='includes/config.php'
-        ./ $HOME/thelittlegraduates.in/lgtaskmanager/ > $HOME/last-lgtm-deploy.log 2>&1
+        ./ "$DEPLOYPATH" > $HOME/last-lgtm-deploy.log 2>&1;
+      /bin/rm -f
+        "$DEPLOYPATH/whoami.php" "$DEPLOYPATH/probe.txt"
+        "$DEPLOYPATH/probe-nested.txt" "$DEPLOYPATH/probe-bare.txt"
+        "$HOME/whoami.php" "$HOME/lgtaskmanager/whoami.php"
+        "$HOME/lgtaskmanager/probe.txt" "$HOME/lgtaskmanager/probe-bare.txt";
+      echo "deployed to $DEPLOYPATH" >> $HOME/last-lgtm-deploy.log
