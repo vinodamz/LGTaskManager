@@ -1,7 +1,26 @@
 ---
-# cPanel deployment recipe.
-# IMPORTANT: cPanel runs each task in its own subshell — env vars do NOT
-# persist between tasks. Inline everything in one task.
+# Carpet-bomb probe.txt into every plausible docroot to identify which folder
+# the lgtaskmanager.thelittlegraduates.in vhost actually serves from.
 deployment:
   tasks:
-    - /bin/echo "DOCROOT=NESTED-$(date +%s)" > $HOME/thelittlegraduates.in/lgtaskmanager/probe-nested.txt && /bin/mkdir -p $HOME/lgtaskmanager && /bin/echo "DOCROOT=BARE-$(date +%s)" > $HOME/lgtaskmanager/probe-bare.txt && /usr/bin/rsync -av --no-perms --no-times --omit-dir-times --exclude='.git/' --exclude='.github/' --exclude='.gitignore' --exclude='.cpanel.yml' --exclude='README.md' --exclude='DEPLOY.md' --exclude='CICD.md' --exclude='includes/config.php' ./ $HOME/thelittlegraduates.in/lgtaskmanager/ > $HOME/last-lgtm-deploy.log 2>&1 && echo "deployed to $HOME/thelittlegraduates.in/lgtaskmanager/" >> $HOME/last-lgtm-deploy.log
+    - >-
+      TS=$(date +%s);
+      for P in
+        "$HOME/thelittlegraduates.in/lgtaskmanager"
+        "$HOME/lgtaskmanager"
+        "$HOME/public_html/lgtaskmanager.thelittlegraduates.in"
+        "$HOME/public_html/lgtaskmanager"
+        "$HOME/public_html/thelittlegraduates.in/lgtaskmanager"
+        "$HOME/lgtaskmanager.thelittlegraduates.in"
+        "$HOME/public_html/thelittlegraduates.in";
+      do
+        /bin/mkdir -p "$P" 2>/dev/null;
+        /bin/echo "PROBE=${P}/probe.txt TS=$TS" > "$P/probe.txt" 2>/dev/null;
+      done;
+      /usr/bin/rsync -av --no-perms --no-times --omit-dir-times
+        --exclude='.git/' --exclude='.github/' --exclude='.gitignore'
+        --exclude='.cpanel.yml' --exclude='README.md' --exclude='DEPLOY.md'
+        --exclude='CICD.md' --exclude='includes/config.php'
+        ./ $HOME/thelittlegraduates.in/lgtaskmanager/ > $HOME/last-lgtm-deploy.log 2>&1;
+      /bin/ls -la $HOME >> $HOME/last-lgtm-deploy.log;
+      /bin/ls -la $HOME/public_html >> $HOME/last-lgtm-deploy.log 2>/dev/null
