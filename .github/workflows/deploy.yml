@@ -39,11 +39,18 @@ jobs:
       CPANEL_TOKEN: ${{ secrets.CPANEL_TOKEN }}
       REPO_ROOT: /home/${{ secrets.CPANEL_USER }}/repos/LGTaskManager
     steps:
+      - name: Normalise host (strip any https:// prefix and trailing /)
+        run: |
+          HOST=$(printf '%s' "${CPANEL_HOST}" | sed -E 's#^https?://##; s#/+$##')
+          # Mask the cleaned host in logs and expose it to later steps.
+          echo "::add-mask::${HOST}"
+          echo "CPANEL_HOST_CLEAN=${HOST}" >> "$GITHUB_ENV"
+
       - name: 1/2 — Pull latest from origin (git fetch + reset to remote)
         run: |
           set -e
           curl -sS --fail-with-body -X POST \
-            "https://${CPANEL_HOST}:2083/execute/VersionControl/update" \
+            "https://${CPANEL_HOST_CLEAN}:2083/execute/VersionControl/update" \
             -H "Authorization: cpanel ${CPANEL_USER}:${CPANEL_TOKEN}" \
             --data-urlencode "repository_root=${REPO_ROOT}" \
             --data-urlencode "branch=main" \
@@ -55,7 +62,7 @@ jobs:
         run: |
           set -e
           curl -sS --fail-with-body -X POST \
-            "https://${CPANEL_HOST}:2083/execute/VersionControlDeployment/create" \
+            "https://${CPANEL_HOST_CLEAN}:2083/execute/VersionControlDeployment/create" \
             -H "Authorization: cpanel ${CPANEL_USER}:${CPANEL_TOKEN}" \
             --data-urlencode "repository_root=${REPO_ROOT}" \
             | tee /tmp/deploy.json
