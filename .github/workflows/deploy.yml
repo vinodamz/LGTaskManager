@@ -68,35 +68,21 @@ jobs:
             | tee /tmp/deploy.json
           jq -e '.status == 1' /tmp/deploy.json > /dev/null || (cat /tmp/deploy.json; exit 1)
 
-      - name: "3/4 — Force LiteSpeed vhost reload (try every known API)"
+      - name: "3/4 — Self-test (warn loudly if vhost is stale)"
         run: |
           set +e
-          # Hostgator's cPanel exposes different function names per version.
-          # Try each in turn until one works; first 'status: 1' wins.
-          DOC="/home/${CPANEL_USER}/thelittlegraduates.in/lgtaskmanager"
-          SUB="lgtaskmanager.thelittlegraduates.in"
-          for FN in \
-            "SubDomain/change_doc_root|domain=${SUB}&dir=${DOC}" \
-            "SubDomain/edit_docroot|domain=${SUB}&new_document_root=${DOC}" \
-            "SubDomain/changedocroot|domain=${SUB}&dir=${DOC}" \
-            "WebVhosts/reconfigure_vhost|domain=${SUB}" \
-            "WebVhosts/configure_vhost|domain=${SUB}" \
-            "WebVhosts/set_homedir_docroot|domain=${SUB}&docroot=${DOC}" \
-            "DomainInfo/set_docroot|domain=${SUB}&dir=${DOC}"
-          do
-            NAME="${FN%%|*}"
-            DATA="${FN##*|}"
-            echo "::group::Trying ${NAME}"
-            RESP=$(curl -sS "https://${CPANEL_HOST_CLEAN}:2083/execute/${NAME}?${DATA}" \
-              -H "Authorization: cpanel ${CPANEL_USER}:${CPANEL_TOKEN}")
-            echo "$RESP" | jq -c '. // .' || echo "$RESP"
-            STATUS=$(echo "$RESP" | jq -r '.status' 2>/dev/null)
-            echo "::endgroup::"
-            if [ "$STATUS" = "1" ]; then
-              echo "✓ ${NAME} worked"
-              break
-            fi
-          done
+          # Probe the live URL right after deploy. If files exist on disk
+          # (we confirm in step 4) but the URL still 404s, LiteSpeed has
+          # lost the vhost mapping. We can't rebuild it via UAPI on this
+          # cPanel build — the user has to click Save in cPanel → Domains.
+          sleep 5
+          STATUS=$(curl -sS -o /dev/null -w "%{http_code}" \
+            "https://lgtaskmanager.thelittlegraduates.in/login.php?_=$(date +%s)")
+          echo "GET /login.php → HTTP $STATUS"
+          if [ "$STATUS" != "200" ] && [ "$STATUS" != "302" ]; then
+            echo "::error::Live URL returned $STATUS — LiteSpeed's vhost cache is stale."
+            echo "::error::Manual fix: cPanel → Domains → row for lgtaskmanager.thelittlegraduates.in → Manage → click Update / Save. Forces vhost rebuild."
+          fi
 
       - name: "4/4 — Diagnostic: confirm docroot and list its files"
         run: |
