@@ -68,18 +68,35 @@ jobs:
             | tee /tmp/deploy.json
           jq -e '.status == 1' /tmp/deploy.json > /dev/null || (cat /tmp/deploy.json; exit 1)
 
-      - name: "3/4 — Force LiteSpeed vhost reload (re-set subdomain docroot)"
+      - name: "3/4 — Force LiteSpeed vhost reload (try every known API)"
         run: |
-          set -e
-          # Re-applying the same docroot value forces cPanel to rewrite the
-          # Apache/LiteSpeed vhost include, fixing the recurring stale-cache
-          # bug where files exist on disk but HTTP returns 404.
-          RESP=$(curl -sS "https://${CPANEL_HOST_CLEAN}:2083/execute/SubDomain/change_doc_root" \
-            -H "Authorization: cpanel ${CPANEL_USER}:${CPANEL_TOKEN}" \
-            --data-urlencode "domain=lgtaskmanager.thelittlegraduates.in" \
-            --data-urlencode "dir=/home/${CPANEL_USER}/thelittlegraduates.in/lgtaskmanager")
-          echo "$RESP" | jq '.'
-          # Don't fail the deploy if this fails — vhost may already be correct.
+          set +e
+          # Hostgator's cPanel exposes different function names per version.
+          # Try each in turn until one works; first 'status: 1' wins.
+          DOC="/home/${CPANEL_USER}/thelittlegraduates.in/lgtaskmanager"
+          SUB="lgtaskmanager.thelittlegraduates.in"
+          for FN in \
+            "SubDomain/change_doc_root|domain=${SUB}&dir=${DOC}" \
+            "SubDomain/edit_docroot|domain=${SUB}&new_document_root=${DOC}" \
+            "SubDomain/changedocroot|domain=${SUB}&dir=${DOC}" \
+            "WebVhosts/reconfigure_vhost|domain=${SUB}" \
+            "WebVhosts/configure_vhost|domain=${SUB}" \
+            "WebVhosts/set_homedir_docroot|domain=${SUB}&docroot=${DOC}" \
+            "DomainInfo/set_docroot|domain=${SUB}&dir=${DOC}"
+          do
+            NAME="${FN%%|*}"
+            DATA="${FN##*|}"
+            echo "::group::Trying ${NAME}"
+            RESP=$(curl -sS "https://${CPANEL_HOST_CLEAN}:2083/execute/${NAME}?${DATA}" \
+              -H "Authorization: cpanel ${CPANEL_USER}:${CPANEL_TOKEN}")
+            echo "$RESP" | jq -c '. // .' || echo "$RESP"
+            STATUS=$(echo "$RESP" | jq -r '.status' 2>/dev/null)
+            echo "::endgroup::"
+            if [ "$STATUS" = "1" ]; then
+              echo "✓ ${NAME} worked"
+              break
+            fi
+          done
 
       - name: "4/4 — Diagnostic: confirm docroot and list its files"
         run: |
