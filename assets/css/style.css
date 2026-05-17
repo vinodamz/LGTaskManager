@@ -237,6 +237,21 @@ h2 { font-weight: 600; font-size: 22px; }
 .numpad .key:active { transform: scale(.95); background: var(--sun); }
 .numpad .key-ghost { background: transparent; font-size: 16px; color: var(--ink-soft); }
 .numpad .key-ghost:active { background: var(--cream-2); }
+.pin-submit {
+    margin-top: 14px;
+    width: 100%;
+    justify-content: center;
+    height: 56px;
+    font-size: 17px;
+    border-radius: 16px;
+}
+.pin-submit[disabled] {
+    background: var(--cream-2);
+    color: var(--ink-soft);
+    border-color: var(--cream-2);
+    cursor: not-allowed;
+    filter: none;
+}
 
 /* =========================================================
    DASHBOARD

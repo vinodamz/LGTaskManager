@@ -167,6 +167,8 @@ $cfg = app_config();
             <button type="button" class="key" data-k="0">0</button>
             <button type="button" class="key key-ghost" data-k="back">←</button>
         </div>
+
+        <button type="button" id="pinSubmit" class="btn btn-primary pin-submit" disabled>Sign in</button>
     </div>
 </div>
 

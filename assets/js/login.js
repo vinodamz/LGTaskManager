@@ -5,10 +5,11 @@
     const overlay = document.getElementById('pinOverlay');
     if (!overlay) return;
 
-    const dots  = document.getElementById('pinDots');
-    const errEl = document.getElementById('pinError');
-    const hello = document.getElementById('pinHello');
-    const modal = overlay.querySelector('.pin-modal');
+    const dots     = document.getElementById('pinDots');
+    const errEl    = document.getElementById('pinError');
+    const hello    = document.getElementById('pinHello');
+    const modal    = overlay.querySelector('.pin-modal');
+    const submitBtn = document.getElementById('pinSubmit');
 
     const PIN_MIN = 4;
     const PIN_MAX = 6;
@@ -41,6 +42,7 @@
         Array.from(dots.children).forEach((d, i) => {
             d.classList.toggle('on', i < pin.length);
         });
+        if (submitBtn) submitBtn.disabled = pin.length < PIN_MIN || busy;
     }
 
     function shake() {
@@ -94,10 +96,12 @@
         else if (k === 'back')       pin = pin.slice(0, -1);
         else if (pin.length < PIN_MAX) pin += k;
         render();
-        // Numpad users get auto-submit at PIN_MIN (4) — most common case.
-        // Longer PINs (5–6 digits) need a physical keyboard + Enter to submit.
-        if (pin.length === PIN_MIN) submit();
+        // Auto-submit only when the user has typed PIN_MAX (6) digits.
+        // For shorter PINs (4–5), the Sign-in button below the numpad submits.
+        if (pin.length === PIN_MAX) submit();
     });
+
+    if (submitBtn) submitBtn.addEventListener('click', () => { if (!busy && pin.length >= PIN_MIN) submit(); });
 
     document.addEventListener('keydown', e => {
         if (overlay.hidden || busy) return;
