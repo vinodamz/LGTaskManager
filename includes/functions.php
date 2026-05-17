@@ -161,15 +161,17 @@ function materialize_recurrences(): void
     $dom    = (int) date('j');
 
     $pdo = db();
+    // Native MySQL prepares don't allow reusing a named placeholder, so :today
+    // is bound three times under three names.
     $stmt = $pdo->prepare("
         SELECT r.*
         FROM task_recurrences r
         WHERE r.is_active = 1
-          AND r.start_date <= :today
-          AND (r.end_date IS NULL OR r.end_date >= :today)
+          AND r.start_date <= :today_a
+          AND (r.end_date IS NULL OR r.end_date >= :today_b)
           AND NOT EXISTS (
               SELECT 1 FROM tasks t
-              WHERE t.recurrence_id = r.id AND t.instance_date = :today
+              WHERE t.recurrence_id = r.id AND t.instance_date = :today_c
           )
           AND (
               r.frequency = 'daily'
@@ -178,7 +180,9 @@ function materialize_recurrences(): void
           )
     ");
     $stmt->execute([
-        ':today'   => $today,
+        ':today_a' => $today,
+        ':today_b' => $today,
+        ':today_c' => $today,
         ':dow_bit' => 1 << $dow,
         ':dom'     => $dom,
     ]);
