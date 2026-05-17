@@ -190,6 +190,10 @@ h2 { font-weight: 600; font-size: 22px; }
     padding: 16px;
     opacity: 0; transition: opacity .2s ease;
 }
+/* Honour the HTML `hidden` attribute even though `.pin-overlay { display: grid }`
+   would otherwise override it. Without this, the invisible (opacity: 0) overlay
+   still covers the viewport and intercepts every click. */
+.pin-overlay[hidden] { display: none !important; }
 .pin-overlay.is-open { opacity: 1; }
 .pin-modal {
     --card: var(--magenta);
