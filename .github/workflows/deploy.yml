@@ -68,20 +68,61 @@ jobs:
             | tee /tmp/deploy.json
           jq -e '.status == 1' /tmp/deploy.json > /dev/null || (cat /tmp/deploy.json; exit 1)
 
-      - name: "3/4 — Self-test (warn loudly if vhost is stale)"
+      - name: "3a/4 — List available PHP versions"
+        id: phpver
         run: |
           set +e
-          # Probe the live URL right after deploy. If files exist on disk
-          # (we confirm in step 4) but the URL still 404s, LiteSpeed has
-          # lost the vhost mapping. We can't rebuild it via UAPI on this
-          # cPanel build — the user has to click Save in cPanel → Domains.
+          echo "::group::Current PHP version mapping"
+          curl -sS "https://${CPANEL_HOST_CLEAN}:2083/execute/LangPHP/php_get_vhost_versions" \
+            -H "Authorization: cpanel ${CPANEL_USER}:${CPANEL_TOKEN}" \
+          | jq '.' | tee /tmp/phpver.json
+          echo "::endgroup::"
+
+          CURRENT=$(jq -r '.data[] | select(.vhost == "lgtaskmanager.thelittlegraduates.in") | .version' /tmp/phpver.json)
+          echo "current_version=${CURRENT}"
+          echo "current_version=${CURRENT}" >> "$GITHUB_OUTPUT"
+
+      - name: "3b/4 — Flip PHP version twice to force vhost rebuild"
+        if: steps.phpver.outputs.current_version != ''
+        run: |
+          set +e
+          CUR="${{ steps.phpver.outputs.current_version }}"
+          # Pick an alt version different from current. Use 'inherit' as it's
+          # always available, then revert.
+          ALT="inherit"
+          if [ "$CUR" = "inherit" ]; then ALT="ea-php82"; fi
+
+          echo "::group::Setting to $ALT"
+          curl -sS "https://${CPANEL_HOST_CLEAN}:2083/execute/LangPHP/php_set_vhost_versions" \
+            -H "Authorization: cpanel ${CPANEL_USER}:${CPANEL_TOKEN}" \
+            --data-urlencode "version=$ALT" \
+            --data-urlencode "vhost=lgtaskmanager.thelittlegraduates.in" \
+          | jq '.'
+          echo "::endgroup::"
+
+          sleep 3
+
+          echo "::group::Reverting to $CUR"
+          curl -sS "https://${CPANEL_HOST_CLEAN}:2083/execute/LangPHP/php_set_vhost_versions" \
+            -H "Authorization: cpanel ${CPANEL_USER}:${CPANEL_TOKEN}" \
+            --data-urlencode "version=$CUR" \
+            --data-urlencode "vhost=lgtaskmanager.thelittlegraduates.in" \
+          | jq '.'
+          echo "::endgroup::"
+
           sleep 5
+
+      - name: "3c/4 — Self-test (probe live URL)"
+        run: |
+          set +e
           STATUS=$(curl -sS -o /dev/null -w "%{http_code}" \
             "https://lgtaskmanager.thelittlegraduates.in/login.php?_=$(date +%s)")
           echo "GET /login.php → HTTP $STATUS"
           if [ "$STATUS" != "200" ] && [ "$STATUS" != "302" ]; then
-            echo "::error::Live URL returned $STATUS — LiteSpeed's vhost cache is stale."
-            echo "::error::Manual fix: cPanel → Domains → row for lgtaskmanager.thelittlegraduates.in → Manage → click Update / Save. Forces vhost rebuild."
+            echo "::error::Live URL returned $STATUS — PHP-version flip didn't fix it."
+            echo "::error::Manual fix: cPanel → Domains → row for lgtaskmanager.thelittlegraduates.in → Manage → click Update / Save."
+          else
+            echo "::notice::Site is live — vhost rebuilt successfully via PHP-version flip."
           fi
 
       - name: "4/4 — Diagnostic: confirm docroot and list its files"
