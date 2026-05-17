@@ -36,15 +36,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Upload changed files via FTPS
+      - name: Upload changed files via FTP
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
         with:
           server:     ${{ secrets.FTP_SERVER }}
           username:   ${{ secrets.FTP_USERNAME }}
           password:   ${{ secrets.FTP_PASSWORD }}
-          server-dir: ${{ secrets.FTP_SERVER_DIR }}   # e.g. /public_html/tasks/
-          protocol:   ftps                            # cPanel usually offers FTPS on port 21
+          server-dir: ${{ secrets.FTP_SERVER_DIR }}
+          # Plain FTP. Switching to FTPS triggers Hostgator's TLS cert hostname mismatch
+          # (the cert is for the server hostname, not the domain). Re-enable once we have
+          # either the matching FTP hostname or relax the check via a self-hosted runner.
+          protocol:   ftp
           port:       21
+          timeout:    60000
           # Only upload what's changed. State is tracked in .ftp-deploy-sync-state.json on the server.
           log-level:  standard
           # Don't touch these on the server:
