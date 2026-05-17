@@ -1,0 +1,61 @@
+name: Deploy to Hostgator
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:        # lets you trigger a deploy manually from the Actions tab
+
+concurrency:
+  group: deploy-hostgator   # don't run two deploys at once
+  cancel-in-progress: false
+
+jobs:
+  lint:
+    name: PHP syntax check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.1'
+          tools: none
+
+      - name: php -l on every .php file
+        run: |
+          set -e
+          find . -path ./.git -prune -o -name '*.php' -print | while read -r f; do
+            php -l "$f" >/dev/null
+          done
+
+  deploy:
+    name: FTP deploy
+    needs: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Upload changed files via FTPS
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server:     ${{ secrets.FTP_SERVER }}
+          username:   ${{ secrets.FTP_USERNAME }}
+          password:   ${{ secrets.FTP_PASSWORD }}
+          server-dir: ${{ secrets.FTP_SERVER_DIR }}   # e.g. /public_html/tasks/
+          protocol:   ftps                            # cPanel usually offers FTPS on port 21
+          port:       21
+          # Only upload what's changed. State is tracked in .ftp-deploy-sync-state.json on the server.
+          log-level:  standard
+          # Don't touch these on the server:
+          exclude: |
+            **/.git*
+            **/.git*/**
+            **/.github/**
+            **/.DS_Store
+            **/node_modules/**
+            README.md
+            DEPLOY.md
+            CICD.md
+            .gitignore
+            includes/config.php

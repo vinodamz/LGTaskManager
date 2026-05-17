@@ -41,7 +41,8 @@ LGTaskManager/
 └── sql/schema.sql     # Database schema
 ```
 
-See [DEPLOY.md](DEPLOY.md) for cPanel deployment steps.
+See [DEPLOY.md](DEPLOY.md) for first-time cPanel deployment, and [CICD.md](CICD.md) for
+the GitHub Actions FTPS auto-deploy workflow.
 
 ## Local development
 
