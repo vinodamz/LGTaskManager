@@ -492,6 +492,16 @@ form.inline { display: inline; }
     display: flex; flex-direction: column; gap: 10px;
     min-height: 80px;
     flex: 1;
+    /* Cap the column at the viewport so adding many cards doesn't push
+       the rest of the page out of view — column body scrolls instead. */
+    max-height: calc(100vh - 320px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+.board-col-list::-webkit-scrollbar { width: 6px; }
+.board-col-list::-webkit-scrollbar-thumb {
+    background: color-mix(in srgb, var(--col) 35%, transparent);
+    border-radius: 999px;
 }
 .board-card {
     background: #fff;
