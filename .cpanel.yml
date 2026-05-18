@@ -6,6 +6,16 @@
 deployment:
   tasks:
     - /usr/bin/rsync -av --checksum --no-perms --omit-dir-times --exclude='.git/' --exclude='.github/' --exclude='.gitignore' --exclude='.cpanel.yml' --exclude='README.md' --exclude='DEPLOY.md' --exclude='CICD.md' --exclude='includes/config.php' ./ $HOME/thelittlegraduates.in/lgtaskmanager/ > $HOME/last-lgtm-deploy.log 2>&1
-    - /usr/bin/find $HOME/thelittlegraduates.in/lgtaskmanager/ -name '*.php' -exec /usr/bin/touch {} +
+    # Critical: fix permissions so the web server can read every file. cPanel's
+    # git-deploy worker runs with a restrictive umask (which causes folders to
+    # be 700 and files 600), and Apache/LiteSpeed then 404's everything even
+    # though it's on disk. Same fix is already applied to MTT.
+    # Parent dir + docroot also need to be 755 — Apache traverses both.
+    - /bin/chmod 755 $HOME/thelittlegraduates.in $HOME/thelittlegraduates.in/lgtaskmanager
+    - /usr/bin/find $HOME/thelittlegraduates.in/lgtaskmanager -type d -exec /bin/chmod 755 {} +
+    - /usr/bin/find $HOME/thelittlegraduates.in/lgtaskmanager -type f -exec /bin/chmod 644 {} +
+    # Touch PHP files so opcache picks up new bytecode on next request.
+    - /usr/bin/find $HOME/thelittlegraduates.in/lgtaskmanager -name '*.php' -exec /usr/bin/touch {} +
     - /bin/cp $HOME/last-lgtm-deploy.log $HOME/thelittlegraduates.in/lgtaskmanager/last-deploy.log
+    - /bin/chmod 644 $HOME/thelittlegraduates.in/lgtaskmanager/last-deploy.log
     - /bin/rm -f $HOME/thelittlegraduates.in/lgtaskmanager/whoami.php $HOME/thelittlegraduates.in/lgtaskmanager/probe.txt $HOME/thelittlegraduates.in/lgtaskmanager/probe-nested.txt $HOME/thelittlegraduates.in/lgtaskmanager/probe-bare.txt $HOME/whoami.php $HOME/lgtaskmanager/whoami.php $HOME/lgtaskmanager/probe.txt $HOME/lgtaskmanager/probe-bare.txt
