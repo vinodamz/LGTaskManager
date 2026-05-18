@@ -211,13 +211,21 @@ function _materialize_recurrences_inner(): void
     foreach ($due as $r) {
         $posQ->execute([':c' => $r['column_id']]);
         $pos = (int) $posQ->fetchColumn();
+
+        // due_date = instance_date + due_offset_days (per-recurrence setting).
+        // Pre-migration recurrences have no column — treat as 0.
+        $offset  = isset($r['due_offset_days']) ? (int)$r['due_offset_days'] : 0;
+        $dueDate = $offset === 0
+            ? $today
+            : (new DateTime($today))->modify(($offset >= 0 ? '+' : '') . $offset . ' days')->format('Y-m-d');
+
         $ins->execute([
             ':t'    => $r['title'],
             ':d'    => $r['description'],
             ':col'  => $r['column_id'],
             ':pos'  => $pos,
             ':p'    => $r['priority'],
-            ':due'  => $today,
+            ':due'  => $dueDate,
             ':a'    => $r['assigned_to_user_id'],
             ':c'    => $r['created_by_user_id'],
             ':r'    => $r['id'],

@@ -38,6 +38,7 @@ CREATE TABLE IF NOT EXISTS task_recurrences (
     frequency            ENUM('daily','weekly','monthly') NOT NULL DEFAULT 'daily',
     days_mask            TINYINT UNSIGNED NOT NULL DEFAULT 127,
     day_of_month         TINYINT UNSIGNED NULL,
+    due_offset_days      INT             NOT NULL DEFAULT 0,
     start_date           DATE           NOT NULL,
     end_date             DATE           NULL,
     is_active            TINYINT(1)     NOT NULL DEFAULT 1,

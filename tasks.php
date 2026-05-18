@@ -97,6 +97,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $startIso = $_POST['rec_start']   ?: date('Y-m-d');
                 $endIso   = $_POST['rec_end']     ?: null;
                 $dom      = $freq === 'monthly' ? max(1, min(28, (int)($_POST['rec_dom'] ?? (int)date('j')))) : null;
+                $offset   = max(0, min(365, (int)($_POST['rec_offset'] ?? 0)));
 
                 // build mask from checkboxes; fall back to preset
                 $mask = 0;
@@ -113,14 +114,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $stmt = db()->prepare("
                     INSERT INTO task_recurrences
                         (title, description, priority, column_id, assigned_to_user_id,
-                         frequency, days_mask, day_of_month, start_date, end_date,
-                         created_by_user_id)
-                    VALUES (:t, :d, :p, :col, :a, :f, :m, :dom, :s, :e, :c)
+                         frequency, days_mask, day_of_month, due_offset_days,
+                         start_date, end_date, created_by_user_id)
+                    VALUES (:t, :d, :p, :col, :a, :f, :m, :dom, :off, :s, :e, :c)
                 ");
                 $stmt->execute([
                     ':t' => $title, ':d' => $description, ':p' => $priority,
                     ':col' => $colId ?: null, ':a' => $assignee,
-                    ':f' => $freq, ':m' => $mask, ':dom' => $dom,
+                    ':f' => $freq, ':m' => $mask, ':dom' => $dom, ':off' => $offset,
                     ':s' => $startIso, ':e' => $endIso, ':c' => $user['id'],
                 ]);
                 materialize_recurrences();  // create today's instance if it qualifies
@@ -389,6 +390,11 @@ include __DIR__ . '/includes/header.php';
                         <div class="field">
                             <label>End <em>(optional)</em></label>
                             <input type="date" name="rec_end" value="">
+                        </div>
+                        <div class="field">
+                            <label>Due offset <em>(days after each creation)</em></label>
+                            <input type="number" name="rec_offset" min="0" max="365" value="0"
+                                   title="0 = same day. 3 = due 3 days after the recurring instance is created.">
                         </div>
                     </div>
                 </div>

@@ -15,8 +15,9 @@ require_admin();
 header('Content-Type: text/plain; charset=utf-8');
 
 $migrations = [
-    '001_kanban'    => __DIR__ . '/sql/migrate_001_kanban.sql',
-    '002_recurring' => __DIR__ . '/sql/migrate_002_recurring.sql',
+    '001_kanban'     => __DIR__ . '/sql/migrate_001_kanban.sql',
+    '002_recurring'  => __DIR__ . '/sql/migrate_002_recurring.sql',
+    '003_due_offset' => __DIR__ . '/sql/migrate_003_due_offset.sql',
 ];
 
 foreach ($migrations as $name => $path) {

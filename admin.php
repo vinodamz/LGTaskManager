@@ -313,12 +313,15 @@ $recurrences = db()->query("
             'monthly' => 'Monthly · day ' . (int)$r['day_of_month'],
             default   => $r['frequency'],
         };
+        $offset = (int)($r['due_offset_days'] ?? 0);
+        $dueRule = $offset === 0 ? 'due same day' : "due +{$offset}d";
     ?>
         <li class="<?= $r['is_active'] ? '' : 'recur-inactive' ?>">
             <div>
                 <div class="recur-title"><?= e($r['title']) ?></div>
                 <div class="recur-meta">
                     <span><?= e($when) ?></span>
+                    <span><?= e($dueRule) ?></span>
                     <?php if (!empty($r['column_name'])): ?><span>→ <?= e($r['column_name']) ?></span><?php endif; ?>
                     <?php if (!empty($r['assignee_name'])): ?><span>👤 <?= e($r['assignee_name']) ?></span><?php endif; ?>
                     <?php if (!empty($r['end_date'])): ?><span>ends <?= e($r['end_date']) ?></span><?php endif; ?>

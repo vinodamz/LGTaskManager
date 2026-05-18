@@ -49,6 +49,7 @@ foreach ($rows as $r) {
     echo "  frequency     : {$r['frequency']}\n";
     echo "  days_mask     : {$r['days_mask']} = " . days_mask_label((int)$r['days_mask']) . "\n";
     echo "  day_of_month  : " . ($r['day_of_month'] ?? '—') . "\n";
+    echo "  due_offset    : " . (int)($r['due_offset_days'] ?? 0) . " days\n";
     echo "  start_date    : {$r['start_date']}\n";
     echo "  end_date      : " . ($r['end_date'] ?? '—') . "\n";
     echo "  column        : " . ($r['column_name'] ?? '— (no column!)') . "\n";
