@@ -44,11 +44,11 @@ $sql = "
     SELECT t.*,
            u.name AS assignee_name,
            col.name AS column_name, col.color AS column_color, col.is_done AS column_done,
-           COALESCE(t.instance_date, t.due_date) AS card_date
+           COALESCE(t.due_date, t.instance_date) AS card_date
     FROM tasks t
     LEFT JOIN users u          ON u.id   = t.assigned_to_user_id
     LEFT JOIN task_columns col ON col.id = t.column_id
-    WHERE COALESCE(t.instance_date, t.due_date) BETWEEN :s AND :e
+    WHERE COALESCE(t.due_date, t.instance_date) BETWEEN :s AND :e
     ORDER BY col.is_done ASC, FIELD(t.priority,'high','normal','low'), t.board_position ASC, t.id DESC
 ";
 $stmt = db()->prepare($sql);

@@ -221,7 +221,7 @@ $whereSql = $where ? 'WHERE ' . implode(' AND ', $where) : '';
 $sql = "
     SELECT t.*, u.name AS assignee_name, c.name AS creator_name,
            col.name AS column_name, col.color AS column_color, col.is_done AS column_done,
-           COALESCE(t.instance_date, t.due_date) AS card_date
+           COALESCE(t.due_date, t.instance_date) AS card_date
     FROM tasks t
     LEFT JOIN users u          ON u.id   = t.assigned_to_user_id
     LEFT JOIN users c          ON c.id   = t.created_by_user_id
@@ -230,12 +230,12 @@ $sql = "
     ORDER BY col.position ASC,
              -- overdue first, then today, then chronological, then no-date last
              CASE
-                WHEN COALESCE(t.instance_date, t.due_date) IS NULL THEN 3
-                WHEN COALESCE(t.instance_date, t.due_date) <  CURDATE() THEN 0
-                WHEN COALESCE(t.instance_date, t.due_date) =  CURDATE() THEN 1
+                WHEN COALESCE(t.due_date, t.instance_date) IS NULL THEN 3
+                WHEN COALESCE(t.due_date, t.instance_date) <  CURDATE() THEN 0
+                WHEN COALESCE(t.due_date, t.instance_date) =  CURDATE() THEN 1
                 ELSE 2
              END,
-             COALESCE(t.instance_date, t.due_date) ASC,
+             COALESCE(t.due_date, t.instance_date) ASC,
              t.board_position ASC,
              t.id DESC
 ";
