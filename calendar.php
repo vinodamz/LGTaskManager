@@ -81,6 +81,7 @@ $titleStr = match ($view) {
 };
 
 $pageTitle = "Calendar — LG Task Manager";
+$wideLayout = true;
 include __DIR__ . '/includes/header.php';
 ?>
 

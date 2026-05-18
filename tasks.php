@@ -252,6 +252,7 @@ foreach ($tasks as $t) {
 }
 
 $pageTitle = 'Tasks — LG Task Manager';
+$wideLayout = ($view === 'board');
 include __DIR__ . '/includes/header.php';
 ?>
 

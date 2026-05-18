@@ -38,7 +38,7 @@ $user = current_user();
         </nav>
     <?php endif; ?>
 </header>
-<main class="container">
+<main class="container<?= !empty($wideLayout) ? ' wide' : '' ?>">
 <?php foreach (flash_get() as $f): ?>
     <div class="flash flash-<?= e($f['type']) ?>"><?= e($f['msg']) ?></div>
 <?php endforeach; ?>
